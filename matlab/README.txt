@@ -1,11 +1,10 @@
-This set of MATLAB files will generate/receive binary CPFSK baseband waveforms.
+This set of MATLAB model files will generate/receive binary CPFSK baseband waveforms. Only models the physical layer portion of the modem, does not include link layer.
 Works on both MATLAB and GNU Octave.
 
-Run fsk.m to simulate the FSK modem just in MATLAB.
-Run fsk_csv.m to write/read IQ samples to/from a csv file so they can be
-    transmitted/received on an RF carrier with a bladeRF. In order to run this
-    successfully you need to add bladeRF/host/misc/matlab to your matlab path
-    (for the save_csv() and load_csv() functions)
+Run fsk.m to simulate the FSK modem
+- Set use_file=1 to write/read IQ samples to/from a csv file so they can be
+  transmitted/received on an RF carrier with a bladeRF (e.g. using bladeRF-cli)
+- If use_file=0, the modem will be simulated only internally in MATLAB/Octave
 
 fsk_mod(): FSK baseband modulator function
 - generates CPFSK baseband IQ waveform of the given set of bits
@@ -24,23 +23,14 @@ fsk_receive(): Receives an FSK frame from a baseband signal
   start of FSK data
 - Calls fsk_demod() to extract bits from the FSK data signal
 
-fsk.m: Script for simulating mod/demod just in MATLAB
-- prompts for an input string (spaces are welcome)
+fsk.m: Script for simulating the modem
+- prompts for an input string (spaces are welcome) or generates random data
 - converts ASCII string to a set of bits
 - calls fsk_transmit to generate the CPFSK baseband IQ waveform
-- adds attenuation and noise to the signal to simulate a channel
+- if use_file=0, adds attenuation and noise to the signal to simulate a channel
+- if use_file=1, writes TX IQ samples to CSV file for transmission with a bladeRF, and waits for user to populate the RX CSV samples file received by a bladeRF (such has with bladeRF-cli)
 - calls fsk_receive to process the waveform and extract data bits
 - converts bits to ASCII string
 - prints received string to command window
+- makes plots
 
-fsk_csv.m: Script for using the modulator/demodulator with samples csv files
-- prompts for an input string (spaces are welcome)
-- converts ASCII string to a set of bits
-- calls fsk_transmit to generate the CPFSK baseband IQ waveform
-- writes the samples to a tx csv file
-- waits for the user to transmit the samples and receive IQ samples
-  in a different csv file (e.g. rx_samples.csv)
-- reads in samples from the rx csv file
-- calls fsk_receive to process the waveform and extract data bits
-- converts bits to ASCII string
-- prints received string to command window

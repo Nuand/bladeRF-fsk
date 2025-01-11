@@ -56,14 +56,17 @@ function [bits, info] = fsk_receive(preamble_waveform, iq_signal, ...
 %    string
 %
 %    INFO a struct containing information to use for debug plots
-%        INFO.iq_filt_norm  = filtered + normalized IQ signal
-%        INFO.preamble_corr = cross correlation of .iq_filt_norm and
-%                                preamble waveform
-%        INFO.dphase        = vector of phase changes in the .iq_filt_norm
+%        INFO.iq_filt_norm    = filtered + normalized IQ signal
+%        INFO.preamble_corr   = cross correlation of .iq_filt_norm and
+%                               preamble waveform
+%        INFO.dphase          = vector of phase changes in the .iq_filt_norm
+%        INFO.sig_start_idx   = starting index of signal in .iq_filt_norm, detected by
+%                               correlator. Start of first data symbol period.
 
-info = struct(    'iq_filt_norm', -1, ...
-                'preamble_corr', -1, ...
-                'dphase', -1);
+info = struct('iq_filt_norm' , -1, ...
+              'preamble_corr', -1, ...
+              'dphase'       , -1, ...
+              'sig_start_idx', -1);
 
 corr_peak_thresh = 0.5625 * (length(preamble_waveform)/decimation_factor)^2;
 
@@ -72,23 +75,24 @@ passband = 1/samps_per_symb * h*2/pi;
 stopband = 1/3 * 8/samps_per_symb * h*2/pi;
 if (stopband < 1)
 	%Design filter
-    b = remez(31, [0 passband stopband 1], [1 1 0 0]);
-    iq_signal = filter(b, 1, iq_signal);
+   b         = remez(31, [0 passband stopband 1], [1 1 0 0]);
+   iq_signal = filter(b, 1, iq_signal);
 end
 
 %Normalize signal to [-1, 1]
-iq_signal = iq_signal / max([ max(real(iq_signal)) max(imag(iq_signal)) ]);
+iq_signal         = iq_signal / max([ max(real(iq_signal)) max(imag(iq_signal)) ]);
 info.iq_filt_norm = iq_signal;
 
 %Correlate input IQ signal with known preamble waveform
 %Decimate iq signal and preamble waveform
-iq_signal_dec = iq_signal(1:decimation_factor:end);
+iq_signal_dec         = iq_signal(1:decimation_factor:end);
 preamble_waveform_dec = preamble_waveform(1:decimation_factor:end);
-corr = xcorr(iq_signal_dec, preamble_waveform_dec);
-info.preamble_corr = corr;
+corr                  = xcorr(iq_signal_dec, preamble_waveform_dec);
+info.preamble_corr    = corr;
 
 %Find peaks in cross correlation power (i^2 + q^2)
-[peaks, peak_locs] = findpeaks(abs(corr).^2);
+[peaks, peak_locs] = max(abs(corr).^2);
+%[peaks, peak_locs] = findpeaks(abs(corr).^2);
 %Attempt to find a peak which passes the threshold
 peak_index = -1;
 for i = 1:length(peaks)
@@ -106,12 +110,13 @@ end
 %Calculate iq_signal start index based on this peak
 %Number of zeros that were padded to the end of preamble waveform inside
 %the xcorr() function so that both vectors were the same length:
-num_padded_zeros = length(iq_signal_dec) - length(preamble_waveform_dec);
-sig_start_index = peak_index - num_padded_zeros;
+num_padded_zeros   = length(iq_signal_dec) - length(preamble_waveform_dec);
+sig_start_idx      = peak_index - num_padded_zeros;
 %Calculate the un-decimated iq_signal start index
-sig_start_index = sig_start_index * decimation_factor - (decimation_factor-1);
+sig_start_idx      = sig_start_idx * decimation_factor - (decimation_factor-1);
+info.sig_start_idx = sig_start_idx;
 
 %Demodulate bits from the IQ signal at the start index
-[bits, info.dphase] = fsk_demod(iq_signal(sig_start_index:end), samps_per_symb, num_bytes);
+[bits, info.dphase] = fsk_demod(iq_signal(sig_start_idx:end), samps_per_symb, num_bytes);
 
 end
