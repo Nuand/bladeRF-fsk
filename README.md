@@ -5,7 +5,7 @@
 The bladeRF-fsk project is a simple frequency shift keying (FSK) based software modem
 implemented entirely on the host PC side in C code. The project uses libbladeRF to
 transmit/receive samples with a bladeRF device. A USB 3.0 port is not required when using
-this modem. The project also contains a MATLAB/Octave simulation/implementation of the
+this modem. The project also contains a MATLAB/Octave model and simulation of the
 physical layer (PHY) portion of the modem.
 
 The top level bladeRF-fsk C program demonstrates the functionality of the modem in a

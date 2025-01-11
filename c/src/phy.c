@@ -763,8 +763,8 @@ void *phy_receive_frames(void *arg)
                 status = bladerf_sync_rx(phy->dev, phy->rx->in_samples, NUM_SAMPLES_RX,
                                             &metadata, 5000);
                 if (status != 0){
-                    fprintf(stderr, "[PHY] %s: Couldn't receive samples from bladeRF\n",
-                            __FUNCTION__);
+                    fprintf(stderr, "[PHY] %s: Couldn't receive samples from bladeRF: %s\n",
+                            __FUNCTION__, bladerf_strerror(status));
                     goto out;
                 }
                 //Check metadata
