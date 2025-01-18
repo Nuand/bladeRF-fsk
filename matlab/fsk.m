@@ -40,7 +40,7 @@ clear; close all;
 %%-------------------SETTINGS-----------------------------
 use_file       = 0;     %1=Write TX samples to CSV file and read RX samples from CSV file
                         %0=Simulate internally only
-rand_input     = 1;     %1=use random input TX data, 0=prompt for string entered by user
+rand_input     = 0;     %1=use random input TX data, 0=prompt for string entered by user
    rand_nbytes = 1000;  %number of bytes to transmit if rand_input=1
 
 Fs             = 2e6;   %Sample rate of 2 Msps (500ns sample period)
@@ -86,12 +86,13 @@ null_amt = 200;
 
 if rand_input
    %Create random data
+   fprintf('Generating %d bytes of random data\n', rand_nbytes);
    rng(0);  %set seed for consistent output
    tx_bits = randi([0, 255], 1, rand_nbytes);
    tx_bits = dec2bin(uint8(tx_bits), 8);
 else
    %Prompt for string to transmit
-   prompt = 'Enter a string to tx: ';
+   prompt = 'Enter a string to TX: ';
    str = input(prompt, 's');
    %Convert to bit matrix
    tx_bits = dec2bin(uint8(str), 8);
@@ -122,8 +123,9 @@ plot(repmat(t(first_sym_start), 1, 2), [-1 1], '--');
 plot(repmat(t(preamble_start),  1, 2), [-1 1], '--');
 plot(repmat(t(data_start),      1, 2), [-1 1], '--');
 plot(repmat(t(last_sym_end),    1, 2), [-1 1], '--');
-plot(t(first_sym_start:samps_per_symb:last_sym_end), zeros(1, nsym+1), '*r');
-legend('I', 'Q', 'training start', 'preamble start', 'data start', 'data end', 'sym boundaries');
+plot(t(first_sym_start:samps_per_symb  :last_sym_end), zeros(1, nsym+1),   '*r');
+plot(t(first_sym_start:samps_per_symb*8:last_sym_end), zeros(1, nsym/8+1), '*g');
+legend('I', 'Q', 'training start', 'preamble start', 'data start', 'data end', 'sym boundaries', 'byte boundaries');
 title('TX IQ samples vs time');
 
 %TX spectrum
@@ -137,8 +139,8 @@ title('TX spectrum');
 if use_file
    %Write to csv file
    save_csv(txfile, tx_sig.');
+   fprintf('Wrote TX IQ samples to %s.\n', txfile);
 else
-
    %--Add gaussian noise and attenuation to signal
    %Noise power desired in channel (units dBW)
    noise_pow = -25;
@@ -151,7 +153,7 @@ end
 %%---------------------RECEIVE---------------------------
 if use_file
    %Wait for user to transmit/receive these samples with bladeRF
-   disp('Press any key when rx samples file is ready...');
+   fprintf('Press any key when RX IQ samples file %s is ready...\n', rxfile);
    pause;
    %Load signal from file
    rx_sig = load_csv(rxfile).';
@@ -200,13 +202,15 @@ first_sym_start = rx_info.sig_start_idx-(numel(training_seq)+numel(preamble))*sa
 preamble_start  = first_sym_start + numel(training_seq)*samps_per_symb;
 data_start      = preamble_start  + numel(preamble)    *samps_per_symb;
 last_sym_end    = data_start      + numel(tx_bits)     *samps_per_symb;
+%byte boundaries
 
 plot(repmat(first_sym_start, 1, 2), [-1 1], '--');
 plot(repmat(preamble_start,  1, 2), [-1 1], '--');
 plot(repmat(data_start,      1, 2), [-1 1], '--');
 plot(repmat(last_sym_end,    1, 2), [-1 1], '--');
-plot(first_sym_start:samps_per_symb:last_sym_end, zeros(1, nsym+1), '*r');
-legend('I', 'Q', 'training start', 'preamble start', 'data start', 'data end', 'sym boundaries');
+plot(first_sym_start:samps_per_symb  :last_sym_end, zeros(1, nsym+1),   '*r');
+plot(first_sym_start:samps_per_symb*8:last_sym_end, zeros(1, nsym/8+1), '*g');
+legend('I', 'Q', 'training start', 'preamble start', 'data start', 'data end', 'sym boundaries', 'byte boundaries');
 xlabel('samp idx');
 title('RX filtered & normalized IQ samples');
 
@@ -222,7 +226,9 @@ if (rx_info.dphase ~= -1)
    %sym boundaries
    hold on;
    plot(1:samps_per_symb:1+numel(tx_bits)*samps_per_symb, zeros(1, numel(tx_bits)+1), '*r');
-   legend('change in phase', 'sym boundaries');
+   %byte boundaries
+   plot(1:samps_per_symb*8:1+numel(tx_bits)*samps_per_symb, zeros(1, numel(tx_bits)/8+1), '*g');
+   legend('change in phase', 'sym boundaries', 'byte boundaries');
    title('RX dphase (data signal only)');
 end
 

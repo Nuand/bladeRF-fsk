@@ -74,7 +74,7 @@ corr_peak_thresh = 0.5625 * (length(preamble_waveform)/decimation_factor)^2;
 passband = 1/samps_per_symb * h*2/pi;
 stopband = 1/3 * 8/samps_per_symb * h*2/pi;
 if (stopband < 1)
-	%Design filter
+   %Design filter
    b         = remez(31, [0 passband stopband 1], [1 1 0 0]);
    iq_signal = filter(b, 1, iq_signal);
 end
@@ -90,28 +90,20 @@ preamble_waveform_dec = preamble_waveform(1:decimation_factor:end);
 corr                  = xcorr(iq_signal_dec, preamble_waveform_dec);
 info.preamble_corr    = corr;
 
-%Find peaks in cross correlation power (i^2 + q^2)
-[peaks, peak_locs] = max(abs(corr).^2);
-%[peaks, peak_locs] = findpeaks(abs(corr).^2);
-%Attempt to find a peak which passes the threshold
-peak_index = -1;
-for i = 1:length(peaks)
-    if (peaks(i) >= corr_peak_thresh)
-        peak_index = peak_locs(i);
-        break;
-    end
+%Find peak in cross correlation power (i^2 + q^2)
+[peak, peak_idx] = max(abs(corr).^2);
+%Stop if peak does not exceed threshold (no preamble match)
+if peak < corr_peak_thresh
+   fprintf(2, 'fsk_receive(): No preamble match in signal\n');
+   bits = -1;
+   return;
 end
-%Stop if no preamble match
-if (peak_index == -1)
-    fprintf(2, 'fsk_receive(): No preamble match in signal\n');
-    bits = -1;
-    return;
-end
+
 %Calculate iq_signal start index based on this peak
 %Number of zeros that were padded to the end of preamble waveform inside
 %the xcorr() function so that both vectors were the same length:
 num_padded_zeros   = length(iq_signal_dec) - length(preamble_waveform_dec);
-sig_start_idx      = peak_index - num_padded_zeros;
+sig_start_idx      = peak_idx - num_padded_zeros;
 %Calculate the un-decimated iq_signal start index
 sig_start_idx      = sig_start_idx * decimation_factor - (decimation_factor-1);
 info.sig_start_idx = sig_start_idx;
