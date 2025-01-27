@@ -232,6 +232,17 @@ if (rx_info.dphase ~= -1)
    title('RX dphase (data signal only)');
 end
 
+%RX dphase total per symbol (data signal only, training/preamble not included)
+if rx_info.dphase_sym ~= -1
+   figure('position', [0 0 960, 200]);
+   plot(rx_info.dphase_sym);
+   %byte boundaries
+   hold on;
+   plot(1:8:length(rx_info.dphase_sym), zeros(1, length(rx_info.dphase_sym)/8), '*g');;
+   legend('total change in phase', 'byte boundaries (first bit)');
+   title('RX total dphase per symbol (data signal only)');
+end
+
 %---------------------Print received data-------------------
 if (rx_bits(1) ~= -1)
    fprintf('Received: ''%s''\n', bin2dec(rx_bits));

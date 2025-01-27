@@ -62,11 +62,14 @@ function [bits, info] = fsk_receive(preamble_waveform, iq_signal, ...
 %        INFO.dphase          = vector of phase changes in the .iq_filt_norm
 %        INFO.sig_start_idx   = starting index of signal in .iq_filt_norm, detected by
 %                               correlator. Start of first data symbol period.
+%        INFO.dphase_sym      = vector of accumulated phase changes for each symbol in
+%                               .iq_filt_norm. The sign determines whether it's a 0 or 1
 
 info = struct('iq_filt_norm' , -1, ...
               'preamble_corr', -1, ...
               'dphase'       , -1, ...
-              'sig_start_idx', -1);
+              'sig_start_idx', -1, ...
+              'dphase_sym'   , -1);
 
 corr_peak_thresh = 0.5625 * (length(preamble_waveform)/decimation_factor)^2;
 
@@ -105,10 +108,11 @@ end
 num_padded_zeros   = length(iq_signal_dec) - length(preamble_waveform_dec);
 sig_start_idx      = peak_idx - num_padded_zeros;
 %Calculate the un-decimated iq_signal start index
-sig_start_idx      = sig_start_idx * decimation_factor - (decimation_factor-1);
+sig_start_idx      = (sig_start_idx-1) * decimation_factor + 1;
 info.sig_start_idx = sig_start_idx;
 
 %Demodulate bits from the IQ signal at the start index
-[bits, info.dphase] = fsk_demod(iq_signal(sig_start_idx:end), samps_per_symb, num_bytes);
+[bits, info.dphase, info.dphase_sym] = ...
+   fsk_demod(iq_signal(sig_start_idx:end), samps_per_symb, num_bytes);
 
 end
