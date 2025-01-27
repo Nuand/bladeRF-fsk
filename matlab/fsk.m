@@ -202,7 +202,6 @@ first_sym_start = rx_info.sig_start_idx-(numel(training_seq)+numel(preamble))*sa
 preamble_start  = first_sym_start + numel(training_seq)*samps_per_symb;
 data_start      = preamble_start  + numel(preamble)    *samps_per_symb;
 last_sym_end    = data_start      + numel(tx_bits)     *samps_per_symb;
-%byte boundaries
 
 plot(repmat(first_sym_start, 1, 2), [-1 1], '--');
 plot(repmat(preamble_start,  1, 2), [-1 1], '--');
@@ -220,7 +219,7 @@ plot(abs(rx_info.preamble_corr).^2);
 title('RX cross correlation with preamble (power)');
 
 %RX dphase (data signal only, training/preamble not included)
-if (rx_info.dphase ~= -1)
+if rx_info.dphase ~= -1
    figure('position', [0 0 960, 200]);
    plot(rx_info.dphase);
    %sym boundaries
