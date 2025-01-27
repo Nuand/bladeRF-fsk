@@ -172,7 +172,7 @@ struct correlator *corr_init(uint8_t *syms, size_t n, unsigned int sps)
     }
 
     ret->end = &ret->buf[2 * ret->len];
-    //Maximum power is ret->len/DECIMATION_FACTOR * ret->len/DECIMATION_FACTOR
+    //Maximum power is ret->len * ret->len
     ret->threshold_pwr = ret->len * ret->len * 0.5625f;
 
     ret->num_counts = sps/DECIMATION_FACTOR - 1;
@@ -311,7 +311,7 @@ uint64_t corr_process(struct correlator *corr,
         }
 
         /* Update record of which timestamp we're on...*/
-        timestamp += 2;
+        timestamp += DECIMATION_FACTOR;
     }
 
     return detected;
