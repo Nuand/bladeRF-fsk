@@ -34,6 +34,8 @@
 #define BLADERF_BANDWIDTH 1500000
 //2Msps
 #define BLADERF_SAMPLE_RATE 2000000
+//DEBUG: Define this to disable metadata in synchronous interface
+// #define SYNC_NO_METADATA
 
 /**
  * Configure bladeRF device

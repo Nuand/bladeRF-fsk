@@ -160,6 +160,14 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params)
     //2*RAMP_LENGTH for the ramp up/ramp down
     phy->tx->max_num_samples = 2*RAMP_LENGTH + (TRAINING_SEQ_LENGTH + PREAMBLE_LENGTH +
                     MAX_LINK_FRAME_SIZE) * 8 * SAMP_PER_SYMB;
+    #ifdef SYNC_NO_METADATA
+        //Not using metadata mode; round up to multiple of SYNC_BUFFER_SIZE
+        int rem = phy->tx->max_num_samples % SYNC_BUFFER_SIZE;
+        if (rem != 0){
+            phy->tx->max_num_samples = phy->tx->max_num_samples + (SYNC_BUFFER_SIZE - rem);
+        }
+    #endif
+
     phy->tx->samples = malloc(phy->tx->max_num_samples * sizeof(struct complex_sample));
     if (phy->tx->samples == NULL){
         perror("[PHY] malloc");
@@ -503,6 +511,14 @@ void *phy_transmit_frames(void *arg)
         //Calculate the number of samples to transmit.
         num_samples = 2*RAMP_LENGTH + (TRAINING_SEQ_LENGTH + PREAMBLE_LENGTH +
                     phy->tx->data_length) * 8 * SAMP_PER_SYMB;
+        #ifdef SYNC_NO_METADATA
+            //Not using metadata mode; round up to multiple of SYNC_BUFFER_SIZE
+            int rem = num_samples % SYNC_BUFFER_SIZE;
+            if (rem != 0){
+                num_samples = num_samples + (SYNC_BUFFER_SIZE - rem);
+            }
+        #endif
+
         //Add training sequence to tx data buffer
         memcpy(phy->tx->data_buf, &training_seq, TRAINING_SEQ_LENGTH);
         //Add preamble to tx data buffer
@@ -767,18 +783,20 @@ void *phy_receive_frames(void *arg)
                             __FUNCTION__, bladerf_strerror(status));
                     goto out;
                 }
-                //Check metadata
-                if (metadata.status & BLADERF_META_STATUS_OVERRUN){
-                    NOTE("[PHY] %s: Got an overrun. Expected count = %u;"
-                                " actual count = %u. Skipping these samples.\n",
-                                __FUNCTION__, NUM_SAMPLES_RX, metadata.actual_count);
-                    break;
-                }
-                if (timestamp != UINT64_MAX && metadata.timestamp != timestamp+NUM_SAMPLES_RX){
-                    NOTE("[PHY] %s: Unexpected timestamp. Expected %lu, got %lu.\n",
-                            __FUNCTION__, timestamp+NUM_SAMPLES_RX, metadata.timestamp);
-                }
-                timestamp = metadata.timestamp;
+                #ifndef SYNC_NO_METADATA
+                    //Check metadata
+                    if (metadata.status & BLADERF_META_STATUS_OVERRUN){
+                        NOTE("[PHY] %s: Got an overrun. Expected count = %u;"
+                                    " actual count = %u. Skipping these samples.\n",
+                                    __FUNCTION__, NUM_SAMPLES_RX, metadata.actual_count);
+                        break;
+                    }
+                    if (timestamp != UINT64_MAX && metadata.timestamp != timestamp+NUM_SAMPLES_RX){
+                        NOTE("[PHY] %s: Unexpected timestamp. Expected %lu, got %lu.\n",
+                                __FUNCTION__, timestamp+NUM_SAMPLES_RX, metadata.timestamp);
+                    }
+                    timestamp = metadata.timestamp;
+                #endif
 
                 #ifndef BYPASS_RX_CHANNEL_FILTER
                     // Apply channel filter

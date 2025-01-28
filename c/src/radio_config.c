@@ -160,11 +160,16 @@ static int radio_init_sync(struct bladerf *dev)
     const unsigned int buffer_size   = SYNC_BUFFER_SIZE;  /* Must be a multiple of 1024 */
     const unsigned int num_transfers = 16;
     const unsigned int timeout_ms    = 3500;
+    bladerf_format format            = BLADERF_FORMAT_SC16_Q11_META;
+    #ifdef SYNC_NO_METADATA
+        format = BLADERF_FORMAT_SC16_Q11;
+    #endif
+
     /* Configure both the device's RX and TX modules for use with the synchronous
      * interface. SC16 Q11 samples with metadata are used. */
     status = bladerf_sync_config(dev,
                                  BLADERF_MODULE_RX,
-                                 BLADERF_FORMAT_SC16_Q11_META,
+                                 format,
                                  num_buffers,
                                  buffer_size,
                                  num_transfers,
@@ -176,7 +181,7 @@ static int radio_init_sync(struct bladerf *dev)
     }
     status = bladerf_sync_config(dev,
                                  BLADERF_MODULE_TX,
-                                 BLADERF_FORMAT_SC16_Q11_META,
+                                 format,
                                  num_buffers,
                                  buffer_size,
                                  num_transfers,
