@@ -162,6 +162,7 @@ static int radio_init_sync(struct bladerf *dev)
     const unsigned int timeout_ms    = 3500;
     bladerf_format format            = BLADERF_FORMAT_SC16_Q11_META;
     #ifdef SYNC_NO_METADATA
+        DEBUG_MSG("[RADIO] Configuring synchronous interface WITHOUT metadata\n");
         format = BLADERF_FORMAT_SC16_Q11;
     #endif
 
