@@ -470,7 +470,7 @@ void *phy_transmit_frames(void *arg)
 
     //Set field(s) in bladerf metadata struct
     memset(&metadata, 0, sizeof(metadata));
-    metadata.flags =     BLADERF_META_FLAG_TX_BURST_START |
+    metadata.flags =    BLADERF_META_FLAG_TX_BURST_START |
                         BLADERF_META_FLAG_TX_NOW |
                         BLADERF_META_FLAG_TX_BURST_END;
 
