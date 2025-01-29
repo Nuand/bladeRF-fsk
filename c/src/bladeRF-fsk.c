@@ -83,7 +83,7 @@ void *sender(void *arg)
             if (result == NULL){
                 break;
             }
-            num_bytes = sizeof(tx_data);
+            num_bytes = strlen((char *) tx_data) + 1;   //+1 includes null terminator
         }else{
             //Print progress
             fprintf(stderr, "\rSent: %d%%   ",
@@ -134,16 +134,13 @@ void *receiver(void *arg)
             continue;
         }
         //Write the received bytes
+        nwritten = fwrite(rx_data, 1, bytes_received, handle->rx.out);
+        if ((int)nwritten != bytes_received){
+            fprintf(stderr, "ERROR: Couldn't write out received data: ");
+            perror("");
+        }
         if (handle->rx.out == stdout){
-            //Doing this because on windows null characters print as spaces
-            printf("%s", rx_data);
             fflush(stdout);
-        }else{
-            nwritten = fwrite(rx_data, 1, bytes_received, handle->rx.out);
-            if ((int)nwritten != bytes_received){
-                fprintf(stderr, "ERROR: Couldn't write received data to file: ");
-                perror("");
-            }
         }
     }
     return NULL;
