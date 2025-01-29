@@ -1077,11 +1077,16 @@ void *receive_frames(void *arg)
                 crc_32 = crc32(rx_buf, frame_length - sizeof(crc_32));
                 //Compare received CRC vs expected CRC
                 if (crc_32_rx != crc_32){
-                    //Drop the frame since there was an error
-                    //First release the buffer for the PHY
-                    phy_release_rx_buf(link->phy);
-                    NOTE("[LINK] RX: Frame received with errors. Dropping.\n");
-                    state = WAIT;
+                    #ifdef LINK_IGNORE_CRC_ERRORS
+                        NOTE("[LINK] RX: Frame received with errors. Continuing anyway (DEBUG).\n");
+                        state = COPY;
+                    #else
+                        //Drop the frame since there was an error
+                        //First release the buffer for the PHY
+                        phy_release_rx_buf(link->phy);
+                        NOTE("[LINK] RX: Frame received with errors. Dropping.\n");
+                        state = WAIT;
+                    #endif
                 }else{
                     DEBUG_MSG("[LINK] RX: Frame received with no errors\n");
                     state = COPY;
