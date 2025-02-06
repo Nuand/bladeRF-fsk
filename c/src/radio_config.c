@@ -147,6 +147,87 @@ static int radio_configure_module(struct bladerf *dev, struct module_config *c)
             fprintf(stderr, "%s: Invalid module specified (%d)\n",
                     __FUNCTION__, c->module);
     }
+
+    // //DEBUG: get gains and print them out
+    // bladerf_gain_mode mode;
+    // bladerf_gain      gain;
+    // bladerf_lna_gain  lna_gain;
+    // int               vga_gain;
+
+    // //TX
+    // status = bladerf_get_gain_mode(dev, BLADERF_MODULE_TX, &mode);
+    // if (status != 0) {
+    //     fprintf(stderr, "Failed to get TX gain mode: %s\n",
+    //             bladerf_strerror(status));
+    //     return status;
+    // }
+    // printf("TX gain mode = %d\n", mode);
+
+    // status = bladerf_get_gain(dev, BLADERF_MODULE_TX, &gain);
+    // if (status != 0) {
+    //     fprintf(stderr, "Failed to get TX gain: %s\n",
+    //             bladerf_strerror(status));
+    //     return status;
+    // }
+    // printf("TX unified gain = %d\n", gain);
+
+    // status = bladerf_get_txvga1(dev, &vga_gain);
+    // if (status != 0) {
+    //     fprintf(stderr, "Failed to get TX vga1 gain: %s\n",
+    //             bladerf_strerror(status));
+    //     return status;
+    // }
+    // printf("TX vga1 gain = %d\n", vga_gain);
+
+    // status = bladerf_get_txvga2(dev, &vga_gain);
+    // if (status != 0) {
+    //     fprintf(stderr, "Failed to get TX vga2 gain: %s\n",
+    //             bladerf_strerror(status));
+    //     return status;
+    // }
+    // printf("TX vga2 gain = %d\n", vga_gain);
+
+    // //RX
+    // status = bladerf_get_gain_mode(dev, BLADERF_MODULE_RX, &mode);
+    // if (status != 0) {
+    //     fprintf(stderr, "Failed to get RX gain mode: %s\n",
+    //             bladerf_strerror(status));
+    //     return status;
+    // }
+    // printf("RX gain mode = %d\n", mode);
+
+    // status = bladerf_get_gain(dev, BLADERF_MODULE_RX, &gain);
+    // if (status != 0) {
+    //     fprintf(stderr, "Failed to get RX gain: %s\n",
+    //             bladerf_strerror(status));
+    //     return status;
+    // }
+    // printf("RX unified gain = %d\n", gain);
+
+    // status = bladerf_get_lna_gain(dev, &lna_gain);
+    // if (status != 0) {
+    //     fprintf(stderr, "Failed to get RX lna gain: %s\n",
+    //             bladerf_strerror(status));
+    //     return status;
+    // }
+    // printf("RX lna gain = %d\n", lna_gain);
+
+    // status = bladerf_get_rxvga1(dev, &vga_gain);
+    // if (status != 0) {
+    //     fprintf(stderr, "Failed to get RX vga1 gain: %s\n",
+    //             bladerf_strerror(status));
+    //     return status;
+    // }
+    // printf("RX vga1 gain = %d\n", vga_gain);
+
+    // status = bladerf_get_rxvga2(dev, &vga_gain);
+    // if (status != 0) {
+    //     fprintf(stderr, "Failed to get RX vga2 gain: %s\n",
+    //             bladerf_strerror(status));
+    //     return status;
+    // }
+    // printf("RX vga2 gain = %d\n", vga_gain);
+
     return status;
 }
 
@@ -203,6 +284,24 @@ int radio_init_and_configure(struct bladerf *dev, struct radio_params *params)
         bladerf_log_set_verbosity(BLADERF_LOG_LEVEL_DEBUG);
     #endif
 
+    // //DEBUG Set SMD mode
+    // status = bladerf_set_smb_mode(dev, BLADERF_SMB_MODE_DISABLED);
+    // // status = bladerf_set_smb_mode(dev, BLADERF_SMB_MODE_INPUT);
+    // // status = bladerf_set_smb_mode(dev, BLADERF_SMB_MODE_OUTPUT);
+    // if (status != 0){
+    //     fprintf(stderr, "Failed to set SMD mode: %s\n",
+    //             bladerf_strerror(status));
+    // }
+    // bladerf_smb_mode mode;
+    // status = bladerf_get_smb_mode(dev, &mode);
+    // if (status != 0){
+    //     fprintf(stderr, "Failed to get SMD mode: %s\n",
+    //             bladerf_strerror(status));
+    // }
+    // DEBUG_MSG("smb_mode = %d\n", mode);
+    // // DEBUG_MSG("Sleeping for 15 seconds...\n");
+    // // sleep(15);
+
     //Configure TX parameters
     config.module       = BLADERF_MODULE_TX;
     config.frequency    = params->tx_freq;
@@ -228,6 +327,7 @@ int radio_init_and_configure(struct bladerf *dev, struct radio_params *params)
     config.vga1         = params->rx_vga1_gain;
     config.vga2         = params->rx_vga2_gain;
     config.use_unified  = params->rx_use_unified;
+    config.use_agc      = params->rx_agc;
     config.unified_gain = params->rx_unified_gain;
     config.biastee      = params->rx_biastee;
     status = radio_configure_module(dev, &config);
@@ -263,6 +363,21 @@ int radio_init_and_configure(struct bladerf *dev, struct radio_params *params)
         fprintf(stderr, "Couldn't enable RX module: %s\n", bladerf_strerror(status));
         return status;
     }
+
+    // //--DEBUG get sample rates
+    // unsigned int tx_samplerate, rx_samplerate;
+    // status = bladerf_get_sample_rate(dev, BLADERF_MODULE_TX, &tx_samplerate);
+    // if (status != 0){
+    //     fprintf(stderr, "Couldn't get TX samplerate: %s\n", bladerf_strerror(status));
+    //     return status;
+    // }
+    // status = bladerf_get_sample_rate(dev, BLADERF_MODULE_RX, &rx_samplerate);
+    // if (status != 0){
+    //     fprintf(stderr, "Couldn't get RX samplerate: %s\n", bladerf_strerror(status));
+    //     return status;
+    // }
+    // DEBUG_MSG("TX sample rate = %u\nRX sample rate = %u\n", tx_samplerate, rx_samplerate);
+
     return 0;
 }
 

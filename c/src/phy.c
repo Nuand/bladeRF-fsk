@@ -468,6 +468,23 @@ void *phy_transmit_frames(void *arg)
         return NULL;
     }
 
+    #ifdef LOG_TX_SAMPLES
+        //Open TX samples file
+        char   filename[15+BLADERF_SERIAL_LENGTH];
+        char   serial  [BLADERF_SERIAL_LENGTH];
+        size_t nwritten;
+        bladerf_get_serial(phy->dev, serial);
+        snprintf(filename, sizeof(filename), "tx_samples_%s.bin", serial);
+
+        remove(filename);  //first delete existing file
+        FILE *fid = fopen(filename, "ab");  //append
+        if (fid == NULL){
+            fprintf(stderr, "Failed to open TX debug file for appending: %s\n",
+                    strerror(errno));
+            return NULL;
+        }
+    #endif
+
     //Set field(s) in bladerf metadata struct
     memset(&metadata, 0, sizeof(metadata));
     metadata.flags =    BLADERF_META_FLAG_TX_BURST_START |
@@ -543,6 +560,15 @@ void *phy_transmit_frames(void *arg)
                         &(phy->tx->samples[ramp_down_index]));
         //Convert samples
         conv_struct_to_samples(phy->tx->samples, num_samples, out_samples_raw);
+        #ifdef LOG_TX_SAMPLES
+            //--DEBUG Write samples out to binary file
+            nwritten = fwrite(out_samples_raw, sizeof(int16_t), num_samples*2, fid);
+            if ((int) nwritten != num_samples*2){
+                fprintf(stderr, "Failed to write all samples to TX debug file: %s\n",
+                        strerror(errno));
+            }
+            fclose(fid);
+        #endif
 
         //transmit all samples. TX_NOW
         status = bladerf_sync_tx(phy->dev, out_samples_raw, num_samples,
@@ -555,6 +581,9 @@ void *phy_transmit_frames(void *arg)
     }
 
     free(out_samples_raw);
+    #ifdef LOG_TX_SAMPLES
+        fclose(fid);
+    #endif
     return NULL;
 }
 
@@ -755,6 +784,23 @@ void *phy_receive_frames(void *arg)
      * Ensure a cast from uint64_t to size_t is valid. */
     assert(NUM_SAMPLES_RX < SIZE_MAX);
 
+    #ifdef LOG_RX_SAMPLES
+        //Open RX samples file
+        char   filename[15+BLADERF_SERIAL_LENGTH];
+        char   serial  [BLADERF_SERIAL_LENGTH];
+        size_t nwritten;
+        bladerf_get_serial(phy->dev, serial);
+        snprintf(filename, sizeof(filename), "rx_samples_%s.bin", serial);
+
+        remove(filename);  //first delete existing file
+        FILE *fid = fopen(filename, "ab");  //append
+        if (fid == NULL){
+            fprintf(stderr, "Failed to open RX debug file for appending: %s\n",
+                    strerror(errno));
+            goto out;
+        }
+    #endif
+
     //Allocate memory for buffer
     rx_buffer = malloc(MAX_LINK_FRAME_SIZE);
     if (rx_buffer == NULL){
@@ -796,6 +842,15 @@ void *phy_receive_frames(void *arg)
                                 __FUNCTION__, timestamp+NUM_SAMPLES_RX, metadata.timestamp);
                     }
                     timestamp = metadata.timestamp;
+                #endif
+
+                #ifdef LOG_RX_SAMPLES
+                    //--DEBUG Write samples out to binary file
+                    nwritten = fwrite(phy->rx->in_samples, sizeof(int16_t), NUM_SAMPLES_RX*2, fid);
+                    if ((int) nwritten != NUM_SAMPLES_RX*2){
+                        fprintf(stderr, "Failed to write all samples to RX debug file: %s\n",
+                                strerror(errno));
+                    }
                 #endif
 
                 #ifndef BYPASS_RX_CHANNEL_FILTER
@@ -948,6 +1003,9 @@ void *phy_receive_frames(void *arg)
     }
     out:
         free(rx_buffer);
+        #ifdef LOG_RX_SAMPLES
+            fclose(fid);
+        #endif
         return NULL;
 }
 

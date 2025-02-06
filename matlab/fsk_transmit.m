@@ -19,7 +19,7 @@
 %-------------------------------------------------------------------------
 
 function [iq_samples] = fsk_transmit(training_seq, preamble, data, ...
-                                    samps_per_symb, mod_index)
+                                     samps_per_symb, mod_index)
 % FSK_TRANSMIT Produce a baseband FSK signal of the input binary data, with
 % a ramp up/ramp down at the beginning/end of the signal.
 %    [IQ_SAMPLES] = fsk_transmit(TRAINING_SEQ, PREAMBLE, DATA,
@@ -60,9 +60,7 @@ function [iq_samples] = fsk_transmit(training_seq, preamble, data, ...
 
 %----Assemble bitstream to transmit
 %| training sequence | preamble | data |
-bits = training_seq;
-bits(size(bits, 1)+1 : size(bits,1)+size(preamble, 1), :) = preamble;
-bits(size(bits, 1)+1 : size(bits,1)+size(data, 1), :) = data;
+bits = [training_seq; preamble; data];
 
 %----Construct IQ samples vector
 %-Ramp up the I samples from 0 to 1, and leave Q samples as zeros

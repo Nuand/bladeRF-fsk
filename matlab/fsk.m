@@ -6,8 +6,8 @@
 %   2) No scrambling.
 %   3) No link layer functions (no link framing with header, CRC check, ACKs, etc)
 %
-% Set use_file=1 to write TX samples to a CSV file that can be transmitted with a bladeRF,
-% and ingest RX samples from a CSV file received from a bladeRF. bladeRF-cli can be used
+% Set use_file=1 to write TX samples to a file that can be transmitted with a bladeRF,
+% and ingest RX samples from a file received from a bladeRF. bladeRF-cli can be used
 % to transmit/receive the files. txfile and rxfile specify the filenames.
 %
 % If use_file=0, change 'noise_pow' for different amount of channel AWGN noise. Change
@@ -38,9 +38,10 @@
 clear; close all;
 
 %%-------------------SETTINGS-----------------------------
-use_file       = 0;     %1=Write TX samples to CSV file and read RX samples from CSV file
+use_file       = 0;     %1=Write TX samples to file and read RX samples from file
                         %0=Simulate internally only
-rand_input     = 0;     %1=use random input TX data, 0=prompt for string entered by user
+   csv         = 1;     %1=CSV file, 0=binary file
+rand_input     = 1;     %1=use random input TX data, 0=prompt for string entered by user
    rand_nbytes = 1000;  %number of bytes to transmit if rand_input=1
 
 Fs             = 2e6;   %Sample rate of 2 Msps (500ns sample period)
@@ -51,22 +52,25 @@ dec_factor     = 2;     %Amount to decimate by when performing correlation with 
 
 if use_file
    addpath('../../../misc/matlab/');   %add save_csv()/load_csv() utility functions
-   txfile = 'tx_samples.csv';
-   rxfile = 'rx_samples.csv';
+   if csv
+      txfile = 'tx_samples.csv';
+      rxfile = 'rx_samples.csv';
+   else
+      txfile = 'tx_samples.bin';
+      rxfile = 'rx_samples.bin';
+   end
 end
 
 %32 bit training sequence
 %hex: AA, AA, AA, AA
-%Note: In order for the preamble waveform not to be messed up, the last
-%sample of the modulated training sequence MUST be 1 + 0j
 training_seq = ['10101010';
                 '10101010';
                 '10101010';
                 '10101010'];
 %32-bit preamble - hex: 2E, 69, 2C, F0
-preamble     = ['00101110'; ...
-                '01101001'; ...
-                '00101100'; ...
+preamble     = ['00101110';
+                '01101001';
+                '00101100';
                 '11110000'];
 
 %--Plot settings
@@ -94,9 +98,25 @@ else
    %Prompt for string to transmit
    prompt = 'Enter a string to TX: ';
    str = input(prompt, 's');
+
    %Convert to bit matrix
    tx_bits = dec2bin(uint8(str), 8);
+   fprintf('String to transmit: %s\n', bin2dec(tx_bits));
 end
+
+%%DEBUG
+%%Write bits to binary file
+%fid = fopen('tx.bin', 'w');
+%fwrite(fid, bin2dec(tx_bits));
+%fclose(fid);
+
+%%Add header. data frame
+%seq_num   = 56444;
+%frame_len = 1000;
+%hdr = dec2bin([0, bitand(seq_num, 255), bitshift(seq_num, -8), bitand(frame_len, 255), bitshift(frame_len, -8)], 8);
+%%Add fake CRC footer
+%ftr = dec2bin([123, 80, 64, 129], 8);
+%tx_bits = [hdr; tx_bits; ftr];
 
 %Make FSK signal
 tx_sig = fsk_transmit(training_seq, preamble, tx_bits, samps_per_symb, h);
@@ -128,6 +148,26 @@ plot(t(first_sym_start:samps_per_symb*8:last_sym_end), zeros(1, nsym/8+1), '*g')
 legend('I', 'Q', 'training start', 'preamble start', 'data start', 'data end', 'sym boundaries', 'byte boundaries');
 title('TX IQ samples vs time');
 
+%%DEBUG TX IQ samples
+%figure('position', [0 0 960 200]);
+%plot(real(tx_sig)); hold on;
+%plot(imag(tx_sig));
+%xlabel('time (sec)');
+%%symbol boundaries
+%first_sym_start = null_amt + samps_per_symb;   %first symbol start idx
+%preamble_start  = first_sym_start + numel(training_seq)*samps_per_symb;
+%data_start      = preamble_start  + numel(preamble)    *samps_per_symb;
+%last_sym_end    = data_start      + numel(tx_bits)     *samps_per_symb;
+%
+%plot(repmat(first_sym_start, 1, 2), [-1 1], '--');
+%plot(repmat(preamble_start,  1, 2), [-1 1], '--');
+%plot(repmat(data_start,      1, 2), [-1 1], '--');
+%plot(repmat(last_sym_end,    1, 2), [-1 1], '--');
+%plot(first_sym_start:samps_per_symb  :last_sym_end, zeros(1, nsym+1),   '*r');
+%plot(first_sym_start:samps_per_symb*8:last_sym_end, zeros(1, nsym/8+1), '*g');
+%legend('I', 'Q', 'training start', 'preamble start', 'data start', 'data end', 'sym boundaries', 'byte boundaries');
+%title('TX IQ samples');
+
 %TX spectrum
 figure('position', [0 0 960 200]);
 pwelch(tx_sig, [], [], 4096, Fs, plot_freqrange, 'dB');
@@ -137,8 +177,12 @@ title('TX spectrum');
 
 %---------------------CHANNEL-------------------------
 if use_file
-   %Write to csv file
-   save_csv(txfile, tx_sig.');
+   %Write signal to file
+   if csv
+      save_csv(txfile, tx_sig.');         %Write to csv file
+   else
+      save_sc16q11(txfile, tx_sig.');     %Write to binary file
+   end
    fprintf('Wrote TX IQ samples to %s.\n', txfile);
 else
    %--Add gaussian noise and attenuation to signal
@@ -155,15 +199,18 @@ if use_file
    %Wait for user to transmit/receive these samples with bladeRF
    fprintf('Press any key when RX IQ samples file %s is ready...\n', rxfile);
    pause;
-   %Load signal from file
-   rx_sig = load_csv(rxfile).';
+   if csv
+      rx_sig = load_csv(rxfile).';     %Load from CSV file
+   else
+      rx_sig = load_sc16q11(rxfile).'; %Load from binary file
+   end
 else
    %clamp signal to [-1.0, 1.0]
    rx_sig_i = real(rx_sig);
    rx_sig_q = imag(rx_sig);
-   rx_sig_i(rx_sig_i > 1.0) = 1.0;
+   rx_sig_i(rx_sig_i > 1.0)  =  1.0;
    rx_sig_i(rx_sig_i < -1.0) = -1.0;
-   rx_sig_q(rx_sig_q > 1.0) = 1.0;
+   rx_sig_q(rx_sig_q > 1.0)  =  1.0;
    rx_sig_q(rx_sig_q < -1.0) = -1.0;
    rx_sig = rx_sig_i + 1j*rx_sig_q;
 end
@@ -179,15 +226,15 @@ preamble_waveform = fsk_mod(preamble, samps_per_symb, h, 0);
 t = (0:length(rx_sig)-1)/Fs;
 %RX IQ samples
 figure('position', [0 0 960 200]);
-plot(t, real(rx_sig)); hold on;
-plot(t, imag(rx_sig));
+plot(real(rx_sig)); hold on;
+plot(imag(rx_sig));
 ylim([-1, 1]);
-xlabel('time (sec)');
-title('RX raw IQ samples vs time');
+xlabel('sample index');
+title('RX raw IQ samples');
 
 %RX raw spectrum
 figure('position', [0 0 960 200]);
-pwelch(rx_sig, [], [], 4096, Fs, plot_freqrange, 'dB');
+pwelch(rx_sig, [], [], 16384, Fs, plot_freqrange, 'dB');
 xlabel('frequency [Hz]');
 ylabel('power [dB]');
 title('RX raw spectrum');
@@ -234,11 +281,11 @@ end
 %RX dphase total per symbol (data signal only, training/preamble not included)
 if rx_info.dphase_sym ~= -1
    figure('position', [0 0 960, 200]);
-   plot(rx_info.dphase_sym);
+   plot(rx_info.dphase_sym); hold on;
+   hold on; plot(rx_info.dphase_sym, '.');
    %byte boundaries
-   hold on;
    plot(1:8:length(rx_info.dphase_sym), zeros(1, length(rx_info.dphase_sym)/8), '*g');;
-   legend('total change in phase', 'byte boundaries (first bit)');
+   legend('total change in phase', 'data points', 'byte boundaries (first bit)');
    title('RX total dphase per symbol (data signal only)');
 end
 
@@ -249,6 +296,17 @@ if (rx_bits(1) ~= -1)
       fprintf('RX data matched TX data\n');
    else
       fprintf(2, 'RX data did not match TX data\n');
+      figure('position', [0 0 960, 200]);
+      bit_mismatches = reshape(tx_bits(:,end:-1:1).', 1, []) ~=  reshape(rx_bits(:,end:-1:1).', 1, []);
+      fprintf('   First bit mismatch at index %d\n', find(bit_mismatches, 1));
+      plot(bit_mismatches);
+      title('bit mismatches (1=mismatch)');
+      ylim([0 2]);
    end
+%   if isequal(rx_bits(6:end-4,:), tx_bits(6:end-4,:))
+%      fprintf('RX link payload data matched TX data\n');
+%   else
+%      fprintf(2, 'RX link payload did not match TX data\n');
+%   end
 end
 
