@@ -34,22 +34,24 @@ struct complex_sample {
 
 struct radio_params {
     //TX
-    unsigned int tx_freq;
-    int tx_vga1_gain;    //Range: -35 to -4 dB
-    int tx_vga2_gain;    //Range: 0 to 25 dB
-    int tx_use_unified;  //Boolean
-    int tx_unified_gain; //Range: 0 to 90 dB [dynamic]
-    int tx_biastee;      //Boolean
+    unsigned int    tx_freq;
+    int             tx_chan;         //Range: 0 to 1
+    int             tx_vga1_gain;    //Range: -35 to -4 dB
+    int             tx_vga2_gain;    //Range: 0 to 25 dB
+    bool            tx_use_unified;  //Boolean
+    int             tx_unified_gain; //Range: device dependent
+    bool            tx_biastee;      //Boolean
 
     //RX
-    unsigned int rx_freq;
-    bladerf_lna_gain rx_lna_gain;    //Range: 0 to 6 dB
-    int rx_vga1_gain;    //Range: 5 to 30 dB
-    int rx_vga2_gain;    //Range: 0 to 30 dB
-    int rx_use_unified;  //Boolean
-    int rx_unified_gain; //Range: 0 to 90 dB [dynamic]
-    int rx_biastee;      //Boolean
-    int rx_agc;          //Boolean
+    unsigned int     rx_freq;
+    int              rx_chan;         //Range 0 to 1
+    bladerf_lna_gain rx_lna_gain;     //Range: 0 to 6 dB
+    int              rx_vga1_gain;    //Range: 5 to 30 dB
+    int              rx_vga2_gain;    //Range: 0 to 30 dB
+    bool             rx_use_unified;  //Boolean
+    int              rx_unified_gain; //Range: device dependent
+    bool             rx_biastee;      //Boolean
+    bool             rx_agc;          //Boolean
 };
 
 #endif

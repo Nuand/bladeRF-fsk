@@ -50,6 +50,7 @@
 #define OPTION_RXGAIN   0x83
 #define OPTION_RXBIAST  0x84
 #define OPTION_RXAGC    0x85
+#define OPTION_RXCHAN   0x86
 
 #define OPTION_TXFREQ   't'
 #define OPTION_OUTPUT   'o'
@@ -57,9 +58,33 @@
 #define OPTION_TXVGA2   0x91
 #define OPTION_TXGAIN   0x92
 #define OPTION_TXBIAST  0x93
+#define OPTION_TXCHAN   0x94
 
-#define UNIFIED_GAIN_MIN   0
-#define UNIFIED_GAIN_MAX  60
+#define BLADERF1_TX_GAIN_MAX 73
+#define BLADERF1_TX_GAIN_MIN \
+    BLADERF1_TX_GAIN_MAX - \
+    (BLADERF_TXVGA1_GAIN_MAX - BLADERF_TXVGA1_GAIN_MIN) - \
+    (BLADERF_TXVGA2_GAIN_MAX - BLADERF_TXVGA2_GAIN_MIN)
+#define BLADERF1_RX_GAIN_MAX 60
+#define BLADERF1_RX_GAIN_MIN \
+    BLADERF1_RX_GAIN_MAX - \
+    BLADERF_LNA_GAIN_MAX_DB - \
+    (BLADERF_RXVGA1_GAIN_MAX - BLADERF_RXVGA1_GAIN_MIN) - \
+    (BLADERF_RXVGA2_GAIN_MAX - BLADERF_RXVGA2_GAIN_MIN)
+//Hardcoded bladeRF 2 max/min values. No existing macros for these.
+#define BLADERF2_TX_GAIN_MAX 66
+#define BLADERF2_TX_GAIN_MIN BLADERF2_TX_GAIN_MAX - 90
+#define BLADERF2_RX_GAIN_MAX 60
+#define BLADERF2_RX_GAIN_MIN BLADERF2_RX_GAIN_MAX - 76  //sometimes higher than this depending on freq
+
+//Worst case max and min between both devices, based on the above numbers
+#define TX_GAIN_MIN ((BLADERF1_TX_GAIN_MIN < BLADERF2_TX_GAIN_MIN) ? BLADERF1_TX_GAIN_MIN : BLADERF2_TX_GAIN_MIN)
+#define TX_GAIN_MAX ((BLADERF1_TX_GAIN_MAX > BLADERF2_TX_GAIN_MAX) ? BLADERF1_TX_GAIN_MAX : BLADERF2_TX_GAIN_MAX)
+#define RX_GAIN_MIN ((BLADERF1_RX_GAIN_MIN < BLADERF2_RX_GAIN_MIN) ? BLADERF1_RX_GAIN_MIN : BLADERF2_RX_GAIN_MIN)
+#define RX_GAIN_MAX ((BLADERF1_RX_GAIN_MAX > BLADERF2_RX_GAIN_MAX) ? BLADERF1_RX_GAIN_MAX : BLADERF2_RX_GAIN_MAX)
+
+#define CHAN_MIN 0
+#define CHAN_MAX 1
 
 #define RX_FREQ_DEFAULT 904000000
 #define RX_LNA_DEFAULT  BLADERF_LNA_GAIN_MAX
@@ -69,6 +94,10 @@
 #define TX_FREQ_DEFAULT 924000000
 #define TX_VGA1_DEFAULT BLADERF_TXVGA1_GAIN_MAX
 #define TX_VGA2_DEFAULT BLADERF_TXVGA2_GAIN_MIN
+
+#define CHAN_DEFAULT CHAN_MIN
+#define TX_GAIN_DEFAULT 50
+#define RX_GAIN_DEFAULT 30
 
 static struct option long_options[] = {
     { "help",     no_argument,        NULL,   OPTION_HELP     },
@@ -83,13 +112,15 @@ static struct option long_options[] = {
     { "rx-gain",  required_argument,  NULL,   OPTION_RXGAIN   },
     { "rx-biast", no_argument,        NULL,   OPTION_RXBIAST  },
     { "rx-agc",   no_argument,        NULL,   OPTION_RXAGC    },
+    { "rx-chan",  required_argument,  NULL,   OPTION_RXCHAN   },
 
     { "input",    required_argument,  NULL,   OPTION_INPUT    },
     { "tx-vga1",  required_argument,  NULL,   OPTION_TXVGA1   },
     { "tx-vga2",  required_argument,  NULL,   OPTION_TXVGA2   },
     { "tx-freq",  required_argument,  NULL,   OPTION_TXFREQ   },
     { "tx-gain",  required_argument,  NULL,   OPTION_TXGAIN   },
-    { "tx-biast", no_argument,        NULL,   OPTION_RXBIAST  },
+    { "tx-biast", no_argument,        NULL,   OPTION_TXBIAST  },
+    { "tx-chan",  required_argument,  NULL,   OPTION_TXCHAN   },
 
     { NULL,       0,                  NULL,   0               },
 };
@@ -119,28 +150,26 @@ static struct config *alloc_config_with_defaults()
     }
 
     /* RX defaults */
-    config->rx_output            = NULL;
-
-    config->params.rx_freq        = RX_FREQ_DEFAULT;
-
-    config->params.rx_lna_gain    = RX_LNA_DEFAULT;
+    config->rx_output              = NULL;
+    config->params.rx_freq         = RX_FREQ_DEFAULT;
+    config->params.rx_chan         = CHAN_DEFAULT;
+    config->params.rx_lna_gain     = RX_LNA_DEFAULT;
     config->params.rx_vga1_gain    = RX_VGA1_DEFAULT;
     config->params.rx_vga2_gain    = RX_VGA2_DEFAULT;
     config->params.rx_agc          = 1;
     config->params.rx_use_unified  = 1;
-    config->params.rx_unified_gain = 60;
+    config->params.rx_unified_gain = RX_GAIN_DEFAULT;
     config->params.rx_biastee      = 0;
 
 
     /* TX defaults */
-    config->tx_input            = NULL;
-
-    config->params.tx_freq        = TX_FREQ_DEFAULT;
-
+    config->tx_input               = NULL;
+    config->params.tx_freq         = TX_FREQ_DEFAULT;
+    config->params.tx_chan         = CHAN_DEFAULT;
     config->params.tx_vga1_gain    = TX_VGA1_DEFAULT;
     config->params.tx_vga2_gain    = TX_VGA2_DEFAULT;
     config->params.tx_use_unified  = 1;
-    config->params.tx_unified_gain = 60;
+    config->params.tx_unified_gain = TX_GAIN_DEFAULT;
     config->params.tx_biastee      = 0;
 
     return config;
@@ -221,6 +250,8 @@ int config_init_from_cmdline(int argc, char * const argv[],
                 break;
 
             case OPTION_RXLNA:
+                config->params.rx_agc         = 0;
+                config->params.rx_use_unified = 0;
                 status = str2lnagain(optarg, &config->params.rx_lna_gain);
                 if (status != 0) {
                     fprintf(stderr, "Invalid RX LNA gain: %s\n", optarg);
@@ -229,9 +260,9 @@ int config_init_from_cmdline(int argc, char * const argv[],
                 break;
 
             case OPTION_RXVGA1:
-                config->params.rx_agc = 0;
+                config->params.rx_agc         = 0;
                 config->params.rx_use_unified = 0;
-                config->params.rx_vga1_gain =
+                config->params.rx_vga1_gain   =
                     str2int(optarg,
                             BLADERF_RXVGA1_GAIN_MIN,
                             BLADERF_RXVGA1_GAIN_MAX,
@@ -245,9 +276,9 @@ int config_init_from_cmdline(int argc, char * const argv[],
                 break;
 
             case OPTION_RXVGA2:
-                config->params.rx_agc = 0;
+                config->params.rx_agc         = 0;
                 config->params.rx_use_unified = 0;
-                config->params.rx_vga2_gain =
+                config->params.rx_vga2_gain   =
                     str2int(optarg,
                             BLADERF_RXVGA2_GAIN_MIN,
                             BLADERF_RXVGA2_GAIN_MAX,
@@ -276,11 +307,11 @@ int config_init_from_cmdline(int argc, char * const argv[],
                 break;
 
             case OPTION_RXGAIN:
-                config->params.rx_agc = 0;
+                config->params.rx_agc          = 0;
                 config->params.rx_use_unified  = 1;
                 config->params.rx_unified_gain = str2int(optarg,
-                                    UNIFIED_GAIN_MIN,
-                                    UNIFIED_GAIN_MAX,
+                                    RX_GAIN_MIN,
+                                    RX_GAIN_MAX,
                                     &valid);
 
                 if (!valid) {
@@ -296,6 +327,15 @@ int config_init_from_cmdline(int argc, char * const argv[],
 
             case OPTION_RXBIAST:
                 config->params.rx_biastee = 1;
+                break;
+
+            case OPTION_RXCHAN:
+                config->params.rx_chan = str2int(optarg, CHAN_MIN, CHAN_MAX, &valid);
+                if (!valid) {
+                    status = -1;
+                    fprintf(stderr, "Invalid RX Channel: %s\n", optarg);
+                    goto out;
+                }
                 break;
 
             case OPTION_INPUT:
@@ -324,7 +364,7 @@ int config_init_from_cmdline(int argc, char * const argv[],
 
             case OPTION_TXVGA1:
                 config->params.tx_use_unified = 0;
-                config->params.tx_vga1_gain =
+                config->params.tx_vga1_gain   =
                     str2int(optarg,
                             BLADERF_TXVGA1_GAIN_MIN,
                             BLADERF_TXVGA2_GAIN_MAX,
@@ -339,7 +379,7 @@ int config_init_from_cmdline(int argc, char * const argv[],
 
             case OPTION_TXVGA2:
                 config->params.tx_use_unified = 0;
-                config->params.tx_vga2_gain =
+                config->params.tx_vga2_gain   =
                     str2int(optarg,
                             BLADERF_TXVGA2_GAIN_MIN,
                             BLADERF_TXVGA2_GAIN_MAX,
@@ -355,8 +395,8 @@ int config_init_from_cmdline(int argc, char * const argv[],
             case OPTION_TXGAIN:
                 config->params.tx_use_unified  = 1;
                 config->params.tx_unified_gain = str2int(optarg,
-                                    UNIFIED_GAIN_MIN,
-                                    UNIFIED_GAIN_MAX,
+                                    TX_GAIN_MIN,
+                                    TX_GAIN_MAX,
                                     &valid);
 
                 if (!valid) {
@@ -380,6 +420,15 @@ int config_init_from_cmdline(int argc, char * const argv[],
                 if (!valid) {
                     status = -1;
                     fprintf(stderr, "Invalid TX frequency: %s\n", optarg);
+                    goto out;
+                }
+                break;
+
+            case OPTION_TXCHAN:
+                config->params.tx_chan = str2int(optarg, CHAN_MIN, CHAN_MAX, &valid);
+                if (!valid) {
+                    status = -1;
+                    fprintf(stderr, "Invalid TX Channel: %s\n", optarg);
                     goto out;
                 }
                 break;
@@ -439,38 +488,48 @@ void config_print_options()
 "   -d, --device <str>      Open the specified bladeRF device.\n"
 "                            Any available device is used if not specified.\n"
 "   -q, --quiet             Suppress printing of banner/exit messages.\n"
+"\n"
+"   -r, --rx-freq <freq>    RX frequency [Hz]. May use shorthand (ex: 904M). Default: %d\n"
+"   -o, --output  <file>    RX data output. stdout is used if not specified.\n"
+"\n"
+"   -t, --tx-freq <freq>    TX frequency [Hz]. May use shorthand (ex: 924M). Default: %d\n"
+"   -i, --input   <file>    TX data input. stdin is used if not specified.\n"
 "\n\n"
-"   -r, --rx-freq <freq>    RX frequency in Hz. Default: %d\n"
-"   -o, --output <file>     RX data output. stdout is used if not specified.\n"
+"   --rx-chan <value>       RX channel. Range: %d to %d. Default: %d.            [bladeRF 2 only]\n"
+"   --rx-biast              Enable bias-tee amplifier accessory on RX channel [bladeRF 2 only]\n"
 "\n"
 "   RX gains:\n"
 "   The default RX gain mode is to enable the AGC. To use manual unified gains, use --rx-gain. Alternatively,\n"
 "     to set specific gain stages on the bladeRF 1 specify --rx-lna, --rx-vga1, --rx-vga2.\n"
 "\n"
 "   --rx-agc                Enables slow moving RX AGC (enabled by default)\n"
-"   --rx-gain <value>       RX unified gain. Values: %d to %d. Default %d\n"
-"   --rx-lna <value>        RX LNA gain. Values: bypass, mid, max (default). [bladeRF 1 only]\n"
-"   --rx-vga1 <value>       RX VGA1 gain. Range: %d to %d. Default = %d.      [bladeRF 1 only]\n"
-"   --rx-vga2 <value>       RX VGA2 gain. Range: %d to %d. Default = %d.       [bladeRF 1 only]\n"
+"   --rx-gain <value>       RX unified gain [dB]. Range: %d to %d (bladeRF 1), %d to %d (bladeRF 2). Default: %d.\n"
+"   --rx-lna  <value>       RX LNA gain. Values: bypass, mid, max (default), representing %d to %d dB. [bladeRF 1 only]\n"
+"   --rx-vga1 <value>       RX VGA1 gain [dB]. Range: %d to %d. Default: %d.                          [bladeRF 1 only]\n"
+"   --rx-vga2 <value>       RX VGA2 gain [dB]. Range: %d to %d. Default: %d.                           [bladeRF 1 only]\n"
 "\n\n"
-"   -t, --tx-freq <freq>    TX frequency. Default: %d\n"
-"   -i, --input <file>      TX data input. stdin is used if not specified.\n"
+"   --tx-chan <value>       TX channel. Range: %d to %d. Default: %d.            [bladeRF 2 only]\n"
+"   --tx-biast              Enable bias-tee amplifier accessory on TX channel [bladeRF 2 only]\n"
 "\n"
 "   TX gains:\n"
 "   The default TX gain is to use unified gains, which can be set with --tx-gain. Alternatively,\n"
-"     to set specific gain stages on the bladeRF 1 specify --tx-vag1, --tx-vga2.\n"
+"     to set specific gain stages on the bladeRF 1 specify --tx-vga1, --tx-vga2.\n"
 "\n"
-"   --tx-gain <value>       TX unified gain. Values: %d to %d. Default: %d\n"
-"   --tx-vga1 <value>       TX VGA1 gain. Range: %d to %d. Default = %d. [bladeRF 1 only]\n"
-"   --tx-vga2 <value>       TX VGA2 gain. Range: %d to %d. Default = %d.    [bladeRF 1 only]\n",
+"   --tx-gain <value>       TX unified gain [dB]. Range: %d to %d (bladeRF 1), %d to %d (bladeRF 2). Default: %d.\n"
+"   --tx-vga1 <value>       TX VGA1 gain [dB]. Range: %d to %d. Default: %d. [bladeRF 1 only]\n"
+"   --tx-vga2 <value>       TX VGA2 gain [dB]. Range: %d to %d. Default: %d.    [bladeRF 1 only]\n",
 
     RX_FREQ_DEFAULT,
-    UNIFIED_GAIN_MIN, UNIFIED_GAIN_MAX, UNIFIED_GAIN_MAX,
+    TX_FREQ_DEFAULT,
+
+    CHAN_MIN, CHAN_MAX, CHAN_DEFAULT,
+    BLADERF1_RX_GAIN_MIN, BLADERF1_RX_GAIN_MAX, BLADERF2_RX_GAIN_MIN, BLADERF2_RX_GAIN_MAX, RX_GAIN_DEFAULT,
+    0, BLADERF_LNA_GAIN_MAX_DB,
     BLADERF_RXVGA1_GAIN_MIN, BLADERF_RXVGA1_GAIN_MAX, RX_VGA1_DEFAULT,
     BLADERF_RXVGA2_GAIN_MIN, BLADERF_RXVGA2_GAIN_MAX, RX_VGA2_DEFAULT,
 
-    TX_FREQ_DEFAULT,
-    UNIFIED_GAIN_MIN, UNIFIED_GAIN_MAX, UNIFIED_GAIN_MAX,
+    CHAN_MIN, CHAN_MAX, CHAN_DEFAULT,
+    BLADERF1_TX_GAIN_MIN, BLADERF1_TX_GAIN_MAX, BLADERF2_TX_GAIN_MIN, BLADERF2_TX_GAIN_MAX, TX_GAIN_DEFAULT,
     BLADERF_TXVGA1_GAIN_MIN, BLADERF_TXVGA1_GAIN_MAX, TX_VGA1_DEFAULT,
     BLADERF_TXVGA2_GAIN_MIN, BLADERF_TXVGA2_GAIN_MAX, TX_VGA2_DEFAULT
 
@@ -499,8 +558,9 @@ void print_config(const struct config *config)
     printf("    VGA2 gain:      %d\n", config->params.rx_vga2_gain);
     printf("    Use unified:    %d\n", config->params.rx_use_unified);
     printf("    Unified gain:   %d\n", config->params.rx_unified_gain);
-    printf("    Biastee:        %d\n", config->params.rx_use_unified);
+    printf("    Biastee:        %d\n", config->params.rx_biastee);
     printf("    AGC enabled:    %d\n", config->params.rx_agc);
+    printf("    Channel:        %d\n", config->params.rx_chan);
     printf("\n");
     printf("TX Parameters:\n");
     printf("    Input handle:   %p\n", config->tx_input);
@@ -509,7 +569,8 @@ void print_config(const struct config *config)
     printf("    VGA2 gain:      %d\n", config->params.tx_vga2_gain);
     printf("    Use unified:    %d\n", config->params.tx_use_unified);
     printf("    Unified gain:   %d\n", config->params.tx_unified_gain);
-    printf("    Biastee:        %d\n", config->params.tx_use_unified);
+    printf("    Biastee:        %d\n", config->params.tx_biastee);
+    printf("    Channel:        %d\n", config->params.tx_chan);
     printf("\n");
 }
 

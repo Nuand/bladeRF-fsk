@@ -268,14 +268,13 @@ int main(int argc, char *argv[])
             "Notes:\n"
             "  The -d option takes a device specifier string. See the bladerf_open()\n"
             "  documentation for more information about the format of this string.\n"
-            "  Double dashed arguments such as --rx-gain need to proceed single dash arguments.\n"
             "\n"
             "Example: Text chat between two devices at 904MHz/924MHz with TX gain adjusted.\n"
-            "  Device 1> bladeRF-fsk --rx-biast -d *:serial=4a -r 904M -t 924M --tx-vga2 5\n"
-            "  Device 2> bladeRF-fsk --rx-biast -d *:serial=f0 -r 924M -t 904M --tx-vga2 5\n"
-            "Example: File transfer between two devices at 904MHz/924MHz.\n"
-            "  Receiver   > bladeRF-fsk -d *:serial=4a -r 904M -t 924M -o rx.jpg\n"
-            "  Transmitter> bladeRF-fsk -d *:serial=f0 -r 924M -t 904M -i puppy.jpg\n\n"
+            "  Device 1> bladeRF-fsk -d *:serial=4a -r 904M -t 924M --tx-gain 50\n"
+            "  Device 2> bladeRF-fsk -d *:serial=f0 -r 924M -t 904M --tx-gain 50\n\n"
+            "Example: File transfer between two devices at 2.43GHz/2.45GHz.\n"
+            "  Receiver   > bladeRF-fsk -d *:serial=4a -r 2.43G -t 2.45G -o rx.jpg\n"
+            "  Transmitter> bladeRF-fsk -d *:serial=f0 -r 2.45G -t 2.43G -i puppy.jpg\n\n"
         );
         return 0;
     } else if (status > 0) {

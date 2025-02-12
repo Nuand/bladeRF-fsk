@@ -30,7 +30,7 @@
 
 //private structs
 struct module_config{
-    bladerf_module module;
+    bladerf_channel module;
     unsigned int frequency;
     unsigned int bandwidth;
     unsigned int samplerate;
@@ -72,8 +72,18 @@ static int radio_configure_module(struct bladerf *dev, struct module_config *c)
                 c->bandwidth, bladerf_strerror(status));
         return status;
     }
+    if (c->biastee){
+        status = bladerf_set_bias_tee(dev, c->module, c->biastee);
+        if (status != 0) {
+            fprintf(stderr, "Failed to set bias-tee = %d: %s\n",
+                    c->biastee, bladerf_strerror(status));
+            return status;
+        }
+    }
+
     switch (c->module) {
         case BLADERF_MODULE_RX:
+            //RX gains
             if (c->use_agc) {
                 status = bladerf_set_gain_mode(dev, c->module, BLADERF_GAIN_AUTOMATIC);
                 if (status != 0) {
@@ -119,6 +129,7 @@ static int radio_configure_module(struct bladerf *dev, struct module_config *c)
             }
             break;
         case BLADERF_MODULE_TX:
+            //TX gains
             if (c->use_unified) {
                 status = bladerf_set_gain(dev, c->module, c->unified_gain);
                 if (status != 0) {
@@ -250,7 +261,7 @@ static int radio_init_sync(struct bladerf *dev)
     /* Configure both the device's RX and TX modules for use with the synchronous
      * interface. SC16 Q11 samples with metadata are used. */
     status = bladerf_sync_config(dev,
-                                 BLADERF_MODULE_RX,
+                                 BLADERF_RX_X1,
                                  format,
                                  num_buffers,
                                  buffer_size,
@@ -262,7 +273,7 @@ static int radio_init_sync(struct bladerf *dev)
         return status;
     }
     status = bladerf_sync_config(dev,
-                                 BLADERF_MODULE_TX,
+                                 BLADERF_TX_X1,
                                  format,
                                  num_buffers,
                                  buffer_size,
@@ -303,7 +314,7 @@ int radio_init_and_configure(struct bladerf *dev, struct radio_params *params)
     // // sleep(15);
 
     //Configure TX parameters
-    config.module       = BLADERF_MODULE_TX;
+    config.module       = BLADERF_CHANNEL_TX(params->tx_chan);
     config.frequency    = params->tx_freq;
     config.bandwidth    = BLADERF_BANDWIDTH;
     config.samplerate   = BLADERF_SAMPLE_RATE;
@@ -319,7 +330,7 @@ int radio_init_and_configure(struct bladerf *dev, struct radio_params *params)
     }
 
     //Configure RX parameters
-    config.module       = BLADERF_MODULE_RX;
+    config.module       = BLADERF_CHANNEL_RX(params->rx_chan);
     config.frequency    = params->rx_freq;
     config.bandwidth    = BLADERF_BANDWIDTH;
     config.samplerate   = BLADERF_SAMPLE_RATE;
@@ -352,13 +363,13 @@ int radio_init_and_configure(struct bladerf *dev, struct radio_params *params)
     }
 
     //Enable tx module
-    status = bladerf_enable_module(dev, BLADERF_MODULE_TX, true);
+    status = bladerf_enable_module(dev, BLADERF_CHANNEL_TX(params->tx_chan), true);
     if (status != 0){
         fprintf(stderr, "Couldn't enable TX module: %s\n", bladerf_strerror(status));
         return status;
     }
     //Enable rx module
-    status = bladerf_enable_module(dev, BLADERF_MODULE_RX, true);
+    status = bladerf_enable_module(dev, BLADERF_CHANNEL_RX(params->rx_chan), true);
     if (status != 0){
         fprintf(stderr, "Couldn't enable RX module: %s\n", bladerf_strerror(status));
         return status;
