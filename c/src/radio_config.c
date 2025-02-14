@@ -120,14 +120,14 @@ static int radio_configure_module(struct bladerf *dev, struct module_config *c)
                 return status;
             }
         }else{
-            //Configure the TX VGA1 and TX VGA2 gains
-            status = bladerf_set_txvga1(dev, c->vga1);
+            //Configure the TX VGA1 and TX VGA2 gains using gain stages
+            status = bladerf_set_gain_stage(dev, c->module, "txvga1", c->vga1);
             if (status != 0){
                 fprintf(stderr, "Failed to set TX VGA1 gain: %s\n",
                         bladerf_strerror(status));
                 return status;
             }
-            status = bladerf_set_txvga2(dev, c->vga2);
+            status = bladerf_set_gain_stage(dev, c->module, "txvga2", c->vga2);
             if (status != 0){
                 fprintf(stderr, "Failed to set TX VGA2 gain: %s\n",
                         bladerf_strerror(status));
@@ -172,20 +172,20 @@ static int radio_configure_module(struct bladerf *dev, struct module_config *c)
                     return status;
                 }
             }else{
-                //Configure the gains of the RX LNA, RX VGA1, and RX VGA2
-                status = bladerf_set_lna_gain(dev, c->rx_lna);
+                //Configure the gains using gain stages
+                status = bladerf_set_gain_stage(dev, c->module, "lna", c->rx_lna);
                 if (status != 0){
                     fprintf(stderr, "Failed to set RX LNA gain: %s\n",
                             bladerf_strerror(status));
                     return status;
                 }
-                status = bladerf_set_rxvga1(dev, c->vga1);
+                status = bladerf_set_gain_stage(dev, c->module, "rxvga1", c->vga1);
                 if (status != 0){
                     fprintf(stderr, "Failed to set RX VGA1 gain: %s\n",
                             bladerf_strerror(status));
                     return status;
                 }
-                status = bladerf_set_rxvga2(dev, c->vga2);
+                status = bladerf_set_gain_stage(dev, c->module, "rxvga2", c->vga2);
                 if (status != 0){
                     fprintf(stderr, "Failed to set RX VGA2 gain: %s\n",
                             bladerf_strerror(status));
