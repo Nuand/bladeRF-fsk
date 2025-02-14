@@ -2,8 +2,9 @@ This set of MATLAB model files will generate/receive binary CPFSK baseband wavef
 Works on both MATLAB and GNU Octave.
 
 Run fsk.m to simulate the FSK modem
-- Set use_file=1 to write/read IQ samples to/from a csv file so they can be
+- Set use_file=1 to write/read IQ samples to/from a file so they can be
   transmitted/received on an RF carrier with a bladeRF (e.g. using bladeRF-cli)
+   -set csv=1 to use a CSV file, csv=0 to use a binary file
 - If use_file=0, the modem will be simulated only internally in MATLAB/Octave
 
 fsk_mod(): FSK baseband modulator function
