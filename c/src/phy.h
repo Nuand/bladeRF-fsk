@@ -75,6 +75,7 @@
 #define NUM_SAMPLES_RX SYNC_BUFFER_SIZE
 //Correlator countdown size
 #define CORR_COUNTDOWN SAMP_PER_SYMB
+
 //DEBUG: Define this to write all RX samples out to binary file
 // #define LOG_RX_SAMPLES
 //DEBUG Define this to write all TX samples out to binary file

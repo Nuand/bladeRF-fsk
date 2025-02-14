@@ -58,21 +58,23 @@ When bladeRF-fsk_test_suite gets to phy_receive_test(), be sure to watch the CPU
 
 Below is a list of project-specific CMake options.
 
-| Option                                            | Description                                                 |
-| ------------------------------------------------- |:------------------------------------------------------------|
-| `-DBLADERF-FSK_BYPASS_RX_CHANNEL_FILTER=<ON/OFF>` | Bypass the RX low-pass channel filter. Default: OFF         |
-| `-DBLADERF-FSK_BYPASS_RX_PNORM         =<ON/OFF>` | Bypass RX power normalization. Default: OFF                 |
-| `-DBLADERF-FSK_BYPASS_PHY_SCRAMBLING   =<ON/OFF>` | Bypass scrambling in the PHY layer. Default: OFF            |
-| `-DBLADERF-FSK_ENABLE_NOTES_LINK       =<ON/OFF>` | Print noteworthy messages from link.c. Default: OFF         |
-| `-DBLADERF-FSK_ENABLE_NOTES_PHY        =<ON/OFF>` | Print noteworthy messages from phy.c. Default: OFF          |
-| `-DBLADERF-FSK_ENABLE_DEBUG_ALL        =<ON/OFF>` | Print debug messages from all files & bladeRF. Default: OFF |
-| `-DBLADERF-FSK_ENABLE_DEBUG_TEST_SUITE =<ON/OFF>` | Print debug messages from test_suite.c. Default: OFF        |
-| `-DBLADERF-FSK_ENABLE_DEBUG_CONFIG     =<ON/OFF>` | Print debug messages from config.c. Default: OFF            |
-| `-DBLADERF-FSK_ENABLE_DEBUG_LINK       =<ON/OFF>` | Print debug messages from link.c. Default: OFF              |
-| `-DBLADERF-FSK_ENABLE_DEBUG_PHY        =<ON/OFF>` | Print debug messages from phy.c. Default: OFF               |
-| `-DBLADERF-FSK_ENABLE_DEBUG_CORR       =<ON/OFF>` | Print debug messages from correlator.c. Default: OFF        |
-| `-DBLADERF-FSK_ENABLE_DEBUG_BLADERF    =<ON/OFF>` | Print bladeRF debug messages. Default: OFF                  |
-| `-DBLADERF-FSK_ENABLE_VERBOSE_BLADERF  =<ON/OFF>` | Print bladeRF verbose (and debug) messages. Default: OFF    |
+| Option                                            | Description                                                             |
+| ------------------------------------------------- |:------------------------------------------------------------------------|
+| `-DBLADERF-FSK_BYPASS_RX_CHANNEL_FILTER=<ON/OFF>` | Bypass the RX low-pass channel filter. Default: OFF                     |
+| `-DBLADERF-FSK_BYPASS_RX_PNORM         =<ON/OFF>` | Bypass RX power normalization. Default: OFF                             |
+| `-DBLADERF-FSK_BYPASS_PHY_SCRAMBLING   =<ON/OFF>` | Bypass scrambling in the PHY layer. Default: OFF                        |
+| `-DBLADERF-FSK_ENABLE_NOTES_LINK       =<ON/OFF>` | Print noteworthy messages from link.c. Default: OFF                     |
+| `-DBLADERF-FSK_ENABLE_NOTES_PHY        =<ON/OFF>` | Print noteworthy messages from phy.c. Default: OFF                      |
+| `-DBLADERF-FSK_ENABLE_DEBUG_ALL        =<ON/OFF>` | Print debug messages from all files & bladeRF. Default: OFF             |
+| `-DBLADERF-FSK_ENABLE_DEBUG_TEST_SUITE =<ON/OFF>` | Print debug messages from test_suite.c. Default: OFF                    |
+| `-DBLADERF-FSK_ENABLE_DEBUG_CONFIG     =<ON/OFF>` | Print debug messages from config.c. Default: OFF                        |
+| `-DBLADERF-FSK_ENABLE_DEBUG_LINK       =<ON/OFF>` | Print debug messages from link.c. Default: OFF                          |
+| `-DBLADERF-FSK_ENABLE_DEBUG_PHY        =<ON/OFF>` | Print debug messages from phy.c. Default: OFF                           |
+| `-DBLADERF-FSK_ENABLE_DEBUG_CORR       =<ON/OFF>` | Print debug messages from correlator.c. Default: OFF                    |
+| `-DBLADERF-FSK_ENABLE_DEBUG_BLADERF    =<ON/OFF>` | Print bladeRF debug messages. Default: OFF                              |
+| `-DBLADERF-FSK_ENABLE_VERBOSE_BLADERF  =<ON/OFF>` | Print bladeRF verbose (and debug) messages. Default: OFF                |
+| `-DBLADERF-FSK_LOG_TX_SAMPLES          =<ON/OFF>` | Log all TX samples to binary file tx_samples_[serial].bin. Default: OFF |
+| `-DBLADERF-FSK_LOG_RX_SAMPLES          =<ON/OFF>` | Log all RX samples to binary file rx_samples_[serial].bin. Default: OFF |
 
 Setting -DBLADERF-FSK_ENABLE_NOTES_LINK=ON will show you when a frame is received with
 CRC errors. Setting -DBLADERF-FSK_ENABLE_NOTES_PHY=ON will show you when RX overruns
@@ -97,8 +99,8 @@ bladeRF-fsk -d *:serial=4e
 By default the program uses the first available bladeRF device, gets TX input from stdin,
 writes RX output to stdout, and uses a default set of transmit/receive frequencies and
 gains, with automatic gain control on the RX side. TX gains may need to be tweaked for a
-good connection with another bladeRF running bladeRF-fsk. To transfer files, use the '-i'
-and '-o' options. If using stdin for tx data, the program will transmit data line-by-line.
+good connection with another bladeRF running bladeRF-fsk. To transfer files, use the `-i`
+and `-o` options. If using stdin for tx data, the program will transmit data line-by-line.
 
 The program runs until it gets an EOF in its TX input.
 

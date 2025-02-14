@@ -72,6 +72,8 @@ option(BLADERF-FSK_ENABLE_NOTES_LINK
 option(BLADERF-FSK_BYPASS_RX_CHANNEL_FILTER "Bypass the PHY's RX channel filter." OFF)
 option(BLADERF-FSK_BYPASS_PHY_SCRAMBLING "Bypass scrambling in the phy layer" OFF)
 option(BLADERF-FSK_BYPASS_RX_PNORM "Bypass the PHY's RX power normalization" OFF)
+option(BLADERF-FSK_LOG_TX_SAMPLES "Log all TX samples to binary file tx_samples_[serial].bin" OFF)
+option(BLADERF-FSK_LOG_RX_SAMPLES "Log all RX samples to binary file rx_samples_[serial].bin" OFF)
 
 if(BLADERF-FSK_ENABLE_DEBUG_PHY)
     set_property(SOURCE ${SRC_DIR}/phy.c APPEND_STRING PROPERTY COMPILE_FLAGS "-DDEBUG_MODE ")
@@ -116,6 +118,13 @@ if(BLADERF-FSK_BYPASS_PHY_SCRAMBLING)
 endif()
 if(BLADERF-FSK_BYPASS_RX_PNORM)
     set_property(SOURCE ${SRC_DIR}/phy.c APPEND_STRING PROPERTY COMPILE_FLAGS "-DBYPASS_RX_PNORM ")
+endif()
+
+if(BLADERF-FSK_LOG_TX_SAMPLES)
+    set_property(SOURCE ${SRC_DIR}/phy.c APPEND_STRING PROPERTY COMPILE_FLAGS "-DLOG_TX_SAMPLES ")
+endif()
+if(BLADERF-FSK_LOG_RX_SAMPLES)
+    set_property(SOURCE ${SRC_DIR}/phy.c APPEND_STRING PROPERTY COMPILE_FLAGS "-DLOG_RX_SAMPLES ")
 endif()
 
 ################################################################################
