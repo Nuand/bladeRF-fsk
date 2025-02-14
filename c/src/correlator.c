@@ -32,10 +32,10 @@
 #include "correlator.h"
 #include "phy.h"    //to get fsk_init() parameters
 
-#ifdef ENABLE_CORR_DEBUG_MSG
-#   define DBG(...) fprintf(stderr, "[Corr]  " __VA_ARGS__)
+#ifdef DEBUG_MODE
+#   define DEBUG_MSG(...) fprintf(stderr, "[CORR] " __VA_ARGS__)
 #else
-#   define DBG(...)
+#   define DEBUG_MSG(...)
 #endif
 
 #define COUNTDOWN_INACTIVE  (UINT_MAX)
@@ -185,11 +185,11 @@ struct correlator *corr_init(uint8_t *syms, size_t n, unsigned int sps)
 
     status = 0;
 
-    DBG("Correlator decimation factor = %u\n", DECIMATION_FACTOR);
-    DBG("Correlator length: %zd symbols (%zd samples)\n",
+    DEBUG_MSG("Correlator decimation factor = %u\n", DECIMATION_FACTOR);
+    DEBUG_MSG("Correlator length: %zd symbols (%zd samples)\n",
         n, ret->len);
 
-    DBG("Correlator power threshold: %f\n", ret->threshold_pwr);
+    DEBUG_MSG("Correlator power threshold: %f\n", ret->threshold_pwr);
 
 
 out:
@@ -283,7 +283,7 @@ uint64_t corr_process(struct correlator *corr,
             corr->countdown = corr->num_counts;
             corr->match_timestamp = timestamp;
 
-            DBG("Got a match at %"PRIu64", result_pwr=%f. Resetting countdown.\n",
+            DEBUG_MSG("Got a match at %"PRIu64", result_pwr=%f. Resetting countdown.\n",
                 timestamp, result_pwr);
 
         } else if (corr->countdown != COUNTDOWN_INACTIVE) {
@@ -293,12 +293,12 @@ uint64_t corr_process(struct correlator *corr,
                 /* We have a result! Exit early with it */
                 detected = corr->match_timestamp;
 
-                DBG("Countdown complete. Acquired at: %"PRIu64"\n", detected);
+                DEBUG_MSG("Countdown complete. Acquired at: %"PRIu64"\n", detected);
 
                 corr_reset(corr);
                 return detected;
             } else {
-                DBG("Countdown @ %u\n", corr->countdown);
+                DEBUG_MSG("Countdown @ %u\n", corr->countdown);
             }
         }
 

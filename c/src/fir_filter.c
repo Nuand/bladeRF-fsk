@@ -27,10 +27,10 @@
 
 #include "fir_filter.h"
 
-#ifdef ENABLE_FIR_FILTER_DEBUG_MSG
-#   define DBG(...) fprintf(stderr, "[FIR] " __VA_ARGS__)
+#ifdef DEBUG_MODE
+#   define DEBUG_MSG(...) fprintf(stderr, "[FIR] " __VA_ARGS__)
 #else
-#   define DBG(...)
+#   define DEBUG_MSG(...)
 #endif
 
 struct fir_filter {

@@ -94,8 +94,10 @@ struct phy_handle {
 //Internal functions
 void *phy_receive_frames(void *arg);
 void *phy_transmit_frames(void *arg);
-static void scramble_frame(uint8_t *frame, int frame_length, uint8_t *scrambling_sequence);
-static void unscramble_frame(uint8_t *frame, int frame_length, uint8_t *scrambling_sequence);
+#ifndef BYPASS_PHY_SCRAMBLING
+    static void scramble_frame(uint8_t *frame, int frame_length, uint8_t *scrambling_sequence);
+    static void unscramble_frame(uint8_t *frame, int frame_length, uint8_t *scrambling_sequence);
+#endif
 static void create_ramps(unsigned int ramp_length, struct complex_sample ramp_down_init,
                     struct complex_sample *ramp_up, struct complex_sample *ramp_down);
 
@@ -130,7 +132,8 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params)
     //--------Initialize and configure bladeRF device-------------
     status = radio_init_and_configure(phy->dev, params);
     if (status != 0){
-        fprintf(stderr, "[PHY] %s: Couldn't configure bladeRF\n", __FUNCTION__);
+        fprintf(stderr, "[PHY] %s: Couldn't configure bladeRF: %s\n", __FUNCTION__,
+                        bladerf_strerror(status));
         goto error;
     }
     DEBUG_MSG("[PHY] BladeRF initialized and configured successfully\n");
@@ -637,19 +640,21 @@ static void create_ramps(unsigned int ramp_length, struct complex_sample ramp_do
     ramp_down[ramp_length-1].q = 0;        //Q
 }
 
-/**
- * Scrambles the given data with the given scrambling sequence. The size of the
- * scrambling sequence array must be at least as large as the frame.
- */
-static void scramble_frame(uint8_t *frame, int frame_length,
-                            uint8_t *scrambling_sequence)
-{
-    int i;
-    for (i = 0; i < frame_length; i++){
-        //XOR byte with byte from scrambling sequence
-        frame[i] ^= scrambling_sequence[i];
+#ifndef BYPASS_PHY_SCRAMBLING
+    /**
+    * Scrambles the given data with the given scrambling sequence. The size of the
+    * scrambling sequence array must be at least as large as the frame.
+    */
+    static void scramble_frame(uint8_t *frame, int frame_length,
+                                uint8_t *scrambling_sequence)
+    {
+        int i;
+        for (i = 0; i < frame_length; i++){
+            //XOR byte with byte from scrambling sequence
+            frame[i] ^= scrambling_sequence[i];
+        }
     }
-}
+#endif
 
 /****************************************
  *                                      *
@@ -1009,16 +1014,18 @@ void *phy_receive_frames(void *arg)
         return NULL;
 }
 
-/**
- * Unscrambles the given data with the given scrambling sequence. The size of the
- * scrambling sequence array must be at least as large as the frame.
- */
-static void unscramble_frame(uint8_t *frame, int frame_length,
-                                uint8_t *scrambling_sequence)
-{
-    int i;
-    for (i = 0; i < frame_length; i++){
-        //XOR byte with byte from scrambling sequence
-        frame[i] ^= scrambling_sequence[i];
+#ifndef BYPASS_PHY_SCRAMBLING
+    /**
+    * Unscrambles the given data with the given scrambling sequence. The size of the
+    * scrambling sequence array must be at least as large as the frame.
+    */
+    static void unscramble_frame(uint8_t *frame, int frame_length,
+                                    uint8_t *scrambling_sequence)
+    {
+        int i;
+        for (i = 0; i < frame_length; i++){
+            //XOR byte with byte from scrambling sequence
+            frame[i] ^= scrambling_sequence[i];
+        }
     }
-}
+#endif

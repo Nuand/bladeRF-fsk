@@ -45,7 +45,7 @@
 #define ACK_TIMEOUT_MS 500      //Timeout to wait for an acknowledgement
 #define LINK_MAX_TRIES 3        //Maximum number of frame retransmissions before the
                                 //transmitter gives up
-// //DEBUG: Define this to ignore CRC errors and continue anyway
+//DEBUG: Define this to ignore CRC errors and continue anyway
 // #define LINK_IGNORE_CRC_ERRORS
 
 /** Opaque handle to link data structure */

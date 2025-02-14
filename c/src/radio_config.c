@@ -22,27 +22,27 @@
 
 #include "radio_config.h"
 
-#ifdef DEBUG_MODE
-    #define DEBUG_MSG(...) fprintf(stderr, __VA_ARGS__)
+#if defined(DEBUG_MODE) || defined(VERBOSE_MODE)
+    #define DEBUG_MSG(...) fprintf(stderr, "[RADIO] " __VA_ARGS__)
 #else
     #define DEBUG_MSG(...)
 #endif
 
 //private structs
 struct module_config{
-    bladerf_channel module;
-    unsigned int frequency;
-    unsigned int bandwidth;
-    unsigned int samplerate;
+    bladerf_channel     module;
+    bladerf_frequency   frequency;
+    bladerf_bandwidth   bandwidth;
+    bladerf_sample_rate samplerate;
     /* Gains */
-    int use_unified;
-    int use_agc;
-    int unified_gain;
-    bladerf_lna_gain rx_lna;
-    int vga1;
-    int vga2;
+    bool                use_unified;
+    bool                use_agc;
+    bladerf_gain        unified_gain;
+    bladerf_lna_gain    rx_lna;
+    int                 vga1;
+    int                 vga2;
     /* Biastee control */
-    int biastee;
+    bool                biastee;
 };
 //internal functinos
 static int radio_configure_module(struct bladerf *dev, struct module_config *c);
@@ -54,20 +54,36 @@ static int radio_init_sync(struct bladerf *dev);
 static int radio_configure_module(struct bladerf *dev, struct module_config *c)
 {
     int status;
+    const struct bladerf_range *freq_range;
+    const struct bladerf_range *gain_range;
+
+    //Check to see if frequency is within bounds of device
+    status = bladerf_get_frequency_range(dev, c->module, &freq_range);
+    if (status != 0){
+        fprintf(stderr, "Failed to get frequency range: %s\n",
+                bladerf_strerror(status));
+        return status;
+    }
+    if ((int64_t)c->frequency < freq_range->min || (int64_t)c->frequency > freq_range->max){
+        fprintf(stderr, "Requested frequency %ld Hz is outside supported range [%ld, %ld] Hz\n",
+                c->frequency, freq_range->min, freq_range->max);
+        return BLADERF_ERR_RANGE;
+    }
+
     status = bladerf_set_frequency(dev, c->module, c->frequency);
-    if (status != 0) {
-        fprintf(stderr, "Failed to set frequency = %u: %s\n",
+    if (status != 0){
+        fprintf(stderr, "Failed to set frequency = %lu: %s\n",
                 c->frequency, bladerf_strerror(status));
         return status;
     }
     status = bladerf_set_sample_rate(dev, c->module, c->samplerate, NULL);
-    if (status != 0) {
+    if (status != 0){
         fprintf(stderr, "Failed to set samplerate = %u: %s\n",
                 c->samplerate, bladerf_strerror(status));
         return status;
     }
     status = bladerf_set_bandwidth(dev, c->module, c->bandwidth, NULL);
-    if (status != 0) {
+    if (status != 0){
         fprintf(stderr, "Failed to set bandwidth = %u: %s\n",
                 c->bandwidth, bladerf_strerror(status));
         return status;
@@ -81,82 +97,102 @@ static int radio_configure_module(struct bladerf *dev, struct module_config *c)
         }
     }
 
-    switch (c->module) {
-        case BLADERF_MODULE_RX:
-            //RX gains
-            if (c->use_agc) {
-                status = bladerf_set_gain_mode(dev, c->module, BLADERF_GAIN_AUTOMATIC);
-                if (status != 0) {
-                    fprintf(stderr, "Failed enable RX AGC: %s\n",
-                            bladerf_strerror(status));
-                    return status;
-                }
-            } else {
-                status = bladerf_set_gain_mode(dev, c->module, BLADERF_GAIN_MANUAL);
-                if (status != 0) {
-                    fprintf(stderr, "Failed to disable RX AGC: %s\n",
-                            bladerf_strerror(status));
-                    return status;
-                }
-                if (c->use_unified) {
-                    status = bladerf_set_gain(dev, c->module, c->unified_gain);
-                    if (status != 0) {
-                        fprintf(stderr, "Failed to set unified RX gain: %s\n",
-                                bladerf_strerror(status));
-                        return status;
-                    }
-                } else {
-                    /* Configure the gains of the RX LNA, RX VGA1, and RX VGA2  */
-                    status = bladerf_set_lna_gain(dev, c->rx_lna);
-                    if (status != 0) {
-                        fprintf(stderr, "Failed to set RX LNA gain: %s\n",
-                                bladerf_strerror(status));
-                        return status;
-                    }
-                    status = bladerf_set_rxvga1(dev, c->vga1);
-                    if (status != 0) {
-                        fprintf(stderr, "Failed to set RX VGA1 gain: %s\n",
-                                bladerf_strerror(status));
-                        return status;
-                    }
-                    status = bladerf_set_rxvga2(dev, c->vga2);
-                    if (status != 0) {
-                        fprintf(stderr, "Failed to set RX VGA2 gain: %s\n",
-                                bladerf_strerror(status));
-                        return status;
-                    }
-                }
+    if (BLADERF_CHANNEL_IS_TX(c->module)){
+        //TX gains
+        if (c->use_unified) {
+            //Check to see if gain is within bounds of device
+            status = bladerf_get_gain_range(dev, c->module, &gain_range);
+            if (status != 0){
+                fprintf(stderr, "Failed to get TX gain range: %s\n",
+                        bladerf_strerror(status));
+                return status;
             }
-            break;
-        case BLADERF_MODULE_TX:
-            //TX gains
-            if (c->use_unified) {
+            if (c->unified_gain < gain_range->min || c->unified_gain > gain_range->max){
+                fprintf(stderr, "Requested TX gain %d is outside supported range [%ld, %ld]\n",
+                        c->unified_gain, gain_range->min, gain_range->max);
+                return BLADERF_ERR_RANGE;
+            }
+
+            status = bladerf_set_gain(dev, c->module, c->unified_gain);
+            if (status != 0){
+                fprintf(stderr, "Failed to set unified TX gain: %s\n",
+                        bladerf_strerror(status));
+                return status;
+            }
+        }else{
+            //Configure the TX VGA1 and TX VGA2 gains
+            status = bladerf_set_txvga1(dev, c->vga1);
+            if (status != 0){
+                fprintf(stderr, "Failed to set TX VGA1 gain: %s\n",
+                        bladerf_strerror(status));
+                return status;
+            }
+            status = bladerf_set_txvga2(dev, c->vga2);
+            if (status != 0){
+                fprintf(stderr, "Failed to set TX VGA2 gain: %s\n",
+                        bladerf_strerror(status));
+                return status;
+            }
+        }
+
+    }else{
+        //RX gains
+        if (c->use_agc){
+            status = bladerf_set_gain_mode(dev, c->module, BLADERF_GAIN_AUTOMATIC);
+            if (status != 0){
+                fprintf(stderr, "Failed enable RX AGC: %s\n",
+                        bladerf_strerror(status));
+                return status;
+            }
+        }else{
+            status = bladerf_set_gain_mode(dev, c->module, BLADERF_GAIN_MANUAL);
+            if (status != 0){
+                fprintf(stderr, "Failed to disable RX AGC: %s\n",
+                        bladerf_strerror(status));
+                return status;
+            }
+            if (c->use_unified){
+                //Check to see if gain is within bounds of device
+                status = bladerf_get_gain_range(dev, c->module, &gain_range);
+                if (status != 0){
+                    fprintf(stderr, "Failed to get RX gain range: %s\n",
+                            bladerf_strerror(status));
+                    return status;
+                }
+                if (c->unified_gain < gain_range->min || c->unified_gain > gain_range->max){
+                    fprintf(stderr, "Requested RX gain %d is outside supported range [%ld, %ld]\n",
+                            c->unified_gain, gain_range->min, gain_range->max);
+                    return BLADERF_ERR_RANGE;
+                }
+
                 status = bladerf_set_gain(dev, c->module, c->unified_gain);
-                if (status != 0) {
-                    fprintf(stderr, "Failed to set unified TX gain: %s\n",
+                if (status != 0){
+                    fprintf(stderr, "Failed to set unified RX gain: %s\n",
                             bladerf_strerror(status));
                     return status;
                 }
-            } else {
-                /* Configure the TX VGA1 and TX VGA2 gains */
-                status = bladerf_set_txvga1(dev, c->vga1);
-                if (status != 0) {
-                    fprintf(stderr, "Failed to set TX VGA1 gain: %s\n",
+            }else{
+                //Configure the gains of the RX LNA, RX VGA1, and RX VGA2
+                status = bladerf_set_lna_gain(dev, c->rx_lna);
+                if (status != 0){
+                    fprintf(stderr, "Failed to set RX LNA gain: %s\n",
                             bladerf_strerror(status));
                     return status;
                 }
-                status = bladerf_set_txvga2(dev, c->vga2);
-                if (status != 0) {
-                    fprintf(stderr, "Failed to set TX VGA2 gain: %s\n",
+                status = bladerf_set_rxvga1(dev, c->vga1);
+                if (status != 0){
+                    fprintf(stderr, "Failed to set RX VGA1 gain: %s\n",
+                            bladerf_strerror(status));
+                    return status;
+                }
+                status = bladerf_set_rxvga2(dev, c->vga2);
+                if (status != 0){
+                    fprintf(stderr, "Failed to set RX VGA2 gain: %s\n",
                             bladerf_strerror(status));
                     return status;
                 }
             }
-            break;
-        default:
-            status = BLADERF_ERR_INVAL;
-            fprintf(stderr, "%s: Invalid module specified (%d)\n",
-                    __FUNCTION__, c->module);
+        }
     }
 
     // //DEBUG: get gains and print them out
@@ -248,18 +284,17 @@ static int radio_configure_module(struct bladerf *dev, struct module_config *c)
 static int radio_init_sync(struct bladerf *dev)
 {
     int status;
+    bladerf_format format            = BLADERF_FORMAT_SC16_Q11_META;
     const unsigned int num_buffers   = 64;
     const unsigned int buffer_size   = SYNC_BUFFER_SIZE;  /* Must be a multiple of 1024 */
     const unsigned int num_transfers = 16;
     const unsigned int timeout_ms    = 3500;
-    bladerf_format format            = BLADERF_FORMAT_SC16_Q11_META;
     #ifdef SYNC_NO_METADATA
-        DEBUG_MSG("[RADIO] Configuring synchronous interface WITHOUT metadata\n");
+        DEBUG_MSG("Configuring synchronous interface WITHOUT metadata\n");
         format = BLADERF_FORMAT_SC16_Q11;
     #endif
 
-    /* Configure both the device's RX and TX modules for use with the synchronous
-     * interface. SC16 Q11 samples with metadata are used. */
+    //Configure both the device's RX and TX modules for use with the synchronous interface
     status = bladerf_sync_config(dev,
                                  BLADERF_RX_X1,
                                  format,
@@ -291,7 +326,9 @@ int radio_init_and_configure(struct bladerf *dev, struct radio_params *params)
     struct module_config config;
     int status;
 
-    #ifdef DEBUG_MODE
+    #ifdef VERBOSE_MODE
+        bladerf_log_set_verbosity(BLADERF_LOG_LEVEL_VERBOSE);
+    #elif defined(DEBUG_MODE)
         bladerf_log_set_verbosity(BLADERF_LOG_LEVEL_DEBUG);
     #endif
 
@@ -312,6 +349,18 @@ int radio_init_and_configure(struct bladerf *dev, struct radio_params *params)
     // DEBUG_MSG("smb_mode = %d\n", mode);
     // // DEBUG_MSG("Sleeping for 15 seconds...\n");
     // // sleep(15);
+
+    //Check for invalid channel index outside of supported range
+    if (params->tx_chan >= (int)bladerf_get_channel_count(dev, BLADERF_TX)){
+        fprintf(stderr, "Requested TX channel (%d) exceeds supported range [0, %d]\n",
+                         params->tx_chan, (int)bladerf_get_channel_count(dev, BLADERF_TX) - 1);
+        return BLADERF_ERR_RANGE;
+    }
+    if (params->rx_chan >= (int)bladerf_get_channel_count(dev, BLADERF_RX)){
+        fprintf(stderr, "Requested RX channel (%d) exceeds supported range [0, %d]\n",
+                         params->rx_chan, (int)bladerf_get_channel_count(dev, BLADERF_RX) - 1);
+        return BLADERF_ERR_RANGE;
+    }
 
     //Configure TX parameters
     config.module       = BLADERF_CHANNEL_TX(params->tx_chan);
@@ -374,20 +423,6 @@ int radio_init_and_configure(struct bladerf *dev, struct radio_params *params)
         fprintf(stderr, "Couldn't enable RX module: %s\n", bladerf_strerror(status));
         return status;
     }
-
-    // //--DEBUG get sample rates
-    // unsigned int tx_samplerate, rx_samplerate;
-    // status = bladerf_get_sample_rate(dev, BLADERF_MODULE_TX, &tx_samplerate);
-    // if (status != 0){
-    //     fprintf(stderr, "Couldn't get TX samplerate: %s\n", bladerf_strerror(status));
-    //     return status;
-    // }
-    // status = bladerf_get_sample_rate(dev, BLADERF_MODULE_RX, &rx_samplerate);
-    // if (status != 0){
-    //     fprintf(stderr, "Couldn't get RX samplerate: %s\n", bladerf_strerror(status));
-    //     return status;
-    // }
-    // DEBUG_MSG("TX sample rate = %u\nRX sample rate = %u\n", tx_samplerate, rx_samplerate);
 
     return 0;
 }

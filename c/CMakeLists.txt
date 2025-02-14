@@ -37,14 +37,29 @@ option(BLADERF-FSK_ENABLE_DEBUG_FSK
         "Print debug messages in fsk.c"
         ${BLADERF-FSK_ENABLE_DEBUG_ALL}
 )
-option(
-        BLADERF-FSK_ENABLE_DEBUG_TEST_SUITE
+option(BLADERF-FSK_ENABLE_DEBUG_TEST_SUITE
         "Print debug messages in test_suite.c"
+        ${BLADERF-FSK_ENABLE_DEBUG_ALL}
+)
+option(BLADERF-FSK_ENABLE_DEBUG_CONFIG
+        "Print debug messages in config.c"
+        ${BLADERF-FSK_ENABLE_DEBUG_ALL}
+)
+option(BLADERF-FSK_ENABLE_DEBUG_CORR
+        "Print debug messages in correlator.c"
+        ${BLADERF-FSK_ENABLE_DEBUG_ALL}
+)
+option(BLADERF-FSK_ENABLE_DEBUG_FIR
+        "Print debug messages in fir_filter.c"
         ${BLADERF-FSK_ENABLE_DEBUG_ALL}
 )
 option(BLADERF-FSK_ENABLE_DEBUG_BLADERF
         "Print libbladeRF debug messages"
         ${BLADERF-FSK_ENABLE_DEBUG_ALL}
+)
+option(BLADERF-FSK_ENABLE_VERBOSE_BLADERF
+        "Print libbladeRF verbose (and debug) messages"
+        OFF
 )
 option(BLADERF-FSK_ENABLE_NOTES_PHY
         "Print noteworthy messages (e.g. recoverable errors) in phy.c"
@@ -67,17 +82,28 @@ endif()
 if(BLADERF-FSK_ENABLE_DEBUG_FSK)
     set_property(SOURCE ${SRC_DIR}/fsk.c APPEND_STRING PROPERTY COMPILE_FLAGS "-DDEBUG_MODE ")
 endif()
+if(BLADERF-FSK_ENABLE_DEBUG_TEST_SUITE)
+    set_property(SOURCE ${SRC_DIR}/test_suite.c APPEND_STRING PROPERTY COMPILE_FLAGS "-DDEBUG_MODE ")
+endif()
+if(BLADERF-FSK_ENABLE_DEBUG_CONFIG)
+    set_property(SOURCE ${SRC_DIR}/config.c APPEND_STRING PROPERTY COMPILE_FLAGS "-DDEBUG_MODE ")
+endif()
+if(BLADERF-FSK_ENABLE_DEBUG_CORR)
+    set_property(SOURCE ${SRC_DIR}/correlator.c APPEND_STRING PROPERTY COMPILE_FLAGS "-DDEBUG_MODE ")
+endif()
+if(BLADERF-FSK_ENABLE_DEBUG_FIR)
+    set_property(SOURCE ${SRC_DIR}/fir_filter.c APPEND_STRING PROPERTY COMPILE_FLAGS "-DDEBUG_MODE ")
+endif()
 if(BLADERF-FSK_ENABLE_DEBUG_BLADERF)
     set_property(SOURCE ${SRC_DIR}/radio_config.c APPEND_STRING PROPERTY COMPILE_FLAGS "-DDEBUG_MODE ")
 endif()
-if(BLADERF-FSK_ENABLE_DEBUG_TEST_SUITE)
-    set_property(SOURCE ${SRC_DIR}/test_suite.c APPEND_STRING PROPERTY COMPILE_FLAGS "-DDEBUG_MODE ")
+if(BLADERF-FSK_ENABLE_VERBOSE_BLADERF)
+    set_property(SOURCE ${SRC_DIR}/radio_config.c APPEND_STRING PROPERTY COMPILE_FLAGS "-DVERBOSE_MODE ")
 endif()
 
 if(BLADERF-FSK_ENABLE_NOTES_PHY)
     set_property(SOURCE ${SRC_DIR}/phy.c APPEND_STRING PROPERTY COMPILE_FLAGS "-DENABLE_NOTES ")
 endif()
-
 if(BLADERF-FSK_ENABLE_NOTES_LINK)
     set_property(SOURCE ${SRC_DIR}/link.c APPEND_STRING PROPERTY COMPILE_FLAGS "-DENABLE_NOTES ")
 endif()

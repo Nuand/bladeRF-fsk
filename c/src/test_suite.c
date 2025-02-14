@@ -33,7 +33,7 @@
 #include "fsk.h"
 
 #ifdef DEBUG_MODE
-    #define DEBUG_MSG(...) fprintf(stderr, __VA_ARGS__)
+    #define DEBUG_MSG(...) fprintf(stderr, "[TEST] " __VA_ARGS__)
 #else
     #define DEBUG_MSG(...)
 #endif
@@ -80,11 +80,11 @@ int link_test(char *dev_id1, char *dev_id2, unsigned int tx_freq1, unsigned int 
     tx_data[strlen((char *)tx_data) - 1] = '\0';
 
     //Init link1
-    params.tx_freq         = tx_freq1;
+    params.tx_freq      = tx_freq1;
     params.tx_vga1_gain = -4;
     params.tx_vga2_gain = 0;
-    params.rx_freq         = tx_freq2;
-    params.rx_lna_gain    = BLADERF_LNA_GAIN_MAX;
+    params.rx_freq      = tx_freq2;
+    params.rx_lna_gain  = BLADERF_LNA_GAIN_MAX;
     params.rx_vga1_gain = 23;
     params.rx_vga2_gain = 0;
     link1 = link_init(dev1, &params);
@@ -188,11 +188,11 @@ int phy_test(char *dev_id1, char *dev_id2, unsigned int tx_freq1, unsigned int t
         fprintf(stderr, "Couldn't open bladeRF device #1: %s\n", bladerf_strerror(status));
         goto out;
     }
-    params.tx_freq         = tx_freq1;
+    params.tx_freq      = tx_freq1;
     params.tx_vga1_gain = -4;
     params.tx_vga2_gain = 0;
-    params.rx_freq         = tx_freq2;
-    params.rx_lna_gain    = BLADERF_LNA_GAIN_MAX;
+    params.rx_freq      = tx_freq2;
+    params.rx_lna_gain  = BLADERF_LNA_GAIN_MAX;
     params.rx_vga1_gain = 23;
     params.rx_vga2_gain = 0;
     phy1 = phy_init(dev1, &params);
@@ -325,11 +325,11 @@ int phy_receive_test(void)
         fprintf(stderr, "Couldn't open bladeRF device: %s\n", bladerf_strerror(status));
         goto out;
     }
-    params.tx_freq         = 904000000;
+    params.tx_freq      = 904000000;
     params.tx_vga1_gain = -4;
     params.tx_vga2_gain = 0;
-    params.rx_freq         = 924000000;
-    params.rx_lna_gain    = BLADERF_LNA_GAIN_MAX;
+    params.rx_freq      = 924000000;
+    params.rx_lna_gain  = BLADERF_LNA_GAIN_MAX;
     params.rx_vga1_gain = 23;
     params.rx_vga2_gain = 0;
     phy = phy_init(dev, &params);
