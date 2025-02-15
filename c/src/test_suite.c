@@ -41,7 +41,7 @@
 /**
  * Test link layer code with data transfer between two devices
  */
-int link_test(char *dev_id1, char *dev_id2, unsigned int tx_freq1, unsigned int tx_freq2)
+int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_frequency tx_freq2)
 {
     struct link_handle *link1 = NULL;
     struct link_handle *link2 = NULL;
@@ -80,13 +80,24 @@ int link_test(char *dev_id1, char *dev_id2, unsigned int tx_freq1, unsigned int 
     tx_data[strlen((char *)tx_data) - 1] = '\0';
 
     //Init link1
-    params.tx_freq      = tx_freq1;
-    params.tx_vga1_gain = -4;
-    params.tx_vga2_gain = 0;
-    params.rx_freq      = tx_freq2;
-    params.rx_lna_gain  = BLADERF_LNA_GAIN_MAX;
-    params.rx_vga1_gain = 23;
-    params.rx_vga2_gain = 0;
+    params.tx_freq         = tx_freq1;
+    params.tx_chan         = 0;
+    params.tx_vga1_gain    = -4;
+    params.tx_vga2_gain    = 0;
+    params.tx_use_unified  = 0;
+    params.tx_unified_gain = 0;
+    params.tx_biastee      = 0;
+
+    params.rx_freq         = tx_freq2;
+    params.rx_chan         = 0;
+    params.rx_lna_gain     = BLADERF_LNA_GAIN_BYPASS; //BLADERF_LNA_GAIN_MAX;
+    params.rx_vga1_gain    = 5; //23;
+    params.rx_vga2_gain    = 0;
+    params.rx_use_unified  = 0;
+    params.rx_unified_gain = 0;
+    params.rx_biastee      = 0;
+    params.rx_agc          = 0;
+
     link1 = link_init(dev1, &params);
     if (link1 == NULL){
         fprintf(stderr, "Couldn't initialize link1\n");
@@ -153,7 +164,7 @@ int link_test(char *dev_id1, char *dev_id2, unsigned int tx_freq1, unsigned int 
 /**
  * Test phy layer code with data transfer between two devices
  */
-int phy_test(char *dev_id1, char *dev_id2, unsigned int tx_freq1, unsigned int tx_freq2)
+int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_frequency tx_freq2)
 {
     struct phy_handle *phy1 = NULL;
     struct phy_handle *phy2 = NULL;
@@ -188,13 +199,24 @@ int phy_test(char *dev_id1, char *dev_id2, unsigned int tx_freq1, unsigned int t
         fprintf(stderr, "Couldn't open bladeRF device #1: %s\n", bladerf_strerror(status));
         goto out;
     }
-    params.tx_freq      = tx_freq1;
-    params.tx_vga1_gain = -4;
-    params.tx_vga2_gain = 0;
-    params.rx_freq      = tx_freq2;
-    params.rx_lna_gain  = BLADERF_LNA_GAIN_MAX;
-    params.rx_vga1_gain = 23;
-    params.rx_vga2_gain = 0;
+    params.tx_freq         = tx_freq1;
+    params.tx_chan         = 0;
+    params.tx_vga1_gain    = -4;
+    params.tx_vga2_gain    = 0;
+    params.tx_use_unified  = 0;
+    params.tx_unified_gain = 0;
+    params.tx_biastee      = 0;
+
+    params.rx_freq         = tx_freq2;
+    params.rx_chan         = 0;
+    params.rx_lna_gain     = BLADERF_LNA_GAIN_BYPASS; //BLADERF_LNA_GAIN_MAX;
+    params.rx_vga1_gain    = 5; //23;
+    params.rx_vga2_gain    = 0;
+    params.rx_use_unified  = 0;
+    params.rx_unified_gain = 0;
+    params.rx_biastee      = 0;
+    params.rx_agc          = 0;
+
     phy1 = phy_init(dev1, &params);
     if (phy1 == NULL){
         fprintf(stderr, "Couldn't initialize phy1\n");
@@ -243,7 +265,7 @@ int phy_test(char *dev_id1, char *dev_id2, unsigned int tx_freq1, unsigned int t
     }
 
     //Get the received frame from phy2
-    rx_data = phy_request_rx_buf(phy2, 60000);
+    rx_data = phy_request_rx_buf(phy2, 6000);
     if (rx_data == NULL){
         fprintf(stderr, "Request buffer failed\n");
         goto out;
@@ -325,13 +347,25 @@ int phy_receive_test(void)
         fprintf(stderr, "Couldn't open bladeRF device: %s\n", bladerf_strerror(status));
         goto out;
     }
-    params.tx_freq      = 904000000;
-    params.tx_vga1_gain = -4;
-    params.tx_vga2_gain = 0;
-    params.rx_freq      = 924000000;
-    params.rx_lna_gain  = BLADERF_LNA_GAIN_MAX;
-    params.rx_vga1_gain = 23;
-    params.rx_vga2_gain = 0;
+
+    params.tx_freq         = 904000000;
+    params.tx_chan         = 0;
+    params.tx_vga1_gain    = -4;
+    params.tx_vga2_gain    = 0;
+    params.tx_use_unified  = 0;
+    params.tx_unified_gain = 0;
+    params.tx_biastee      = 0;
+
+    params.rx_freq         = 924000000;
+    params.rx_chan         = 0;
+    params.rx_lna_gain     = BLADERF_LNA_GAIN_BYPASS; //BLADERF_LNA_GAIN_MAX;
+    params.rx_vga1_gain    = 5; //23;
+    params.rx_vga2_gain    = 0;
+    params.rx_use_unified  = 0;
+    params.rx_unified_gain = 0;
+    params.rx_biastee      = 0;
+    params.rx_agc          = 0;
+
     phy = phy_init(dev, &params);
     if (phy == NULL){
         fprintf(stderr, "Couldn't initialize phy\n");
@@ -351,7 +385,7 @@ int phy_receive_test(void)
     //Request data
     rx_data = phy_request_rx_buf(phy, 10000);
     if (rx_data == NULL){
-        fprintf(stderr, "Request buffer failed\n");
+        fprintf(stderr, "Request buffer failed (expected from this test, because there is no transmission)\n");
         goto out;
     }
     phy_release_rx_buf(phy);
