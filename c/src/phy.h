@@ -63,7 +63,7 @@
 #define DATA_FRAME_CODE 0x00
 #define ACK_FRAME_CODE 0xFF
 //Frame lengths
-#define DATA_FRAME_LENGTH 1009
+#define DATA_FRAME_LENGTH 160+9  //link.h PAYLOAD_LENGTH + 9
 #define ACK_FRAME_LENGTH 7
 //Maximum frame size in bytes
 #define MAX_LINK_FRAME_SIZE DATA_FRAME_LENGTH

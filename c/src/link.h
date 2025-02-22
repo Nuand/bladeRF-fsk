@@ -40,7 +40,7 @@
 
 #include "common.h"
 
-#define PAYLOAD_LENGTH 1000     //If you change this, DATA_FRAME_LENGTH
+#define PAYLOAD_LENGTH 160     //If you change this, DATA_FRAME_LENGTH
                                 //ACK_FRAME_LENGTH must also be changed in phy.h
 #define ACK_TIMEOUT_MS 500      //Timeout to wait for an acknowledgement
 #define LINK_MAX_TRIES 3        //Maximum number of frame retransmissions before the
