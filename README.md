@@ -98,7 +98,7 @@ bladeRF-fsk -d *:serial=4e
 ```
 By default the program uses the first available bladeRF device, gets TX input from stdin,
 writes RX output to stdout, and uses a default set of transmit/receive frequencies and
-gains, with automatic gain control on the RX side. TX gains may need to be tweaked for a
+gains, with automatic gain control on the RX side. Gains may need to be adjusted for a
 good connection with another bladeRF running bladeRF-fsk. To transfer files, use the `-i`
 and `-o` options. If using stdin for tx data, the program will transmit data line-by-line.
 
@@ -118,7 +118,7 @@ bladeRF-fsk -r 924M -t 904M
 ```
 4) Type out a message on one device and press ENTER. A packet will be transmitted and the
    message will appear on the other device. Both sides can send/receive messages.
-5) Press [CTRL-D] on Linux/OSX or [CTRL-Z then ENTER] to quit
+5) Press [CTRL-D] on Linux/OSX or [CTRL-Z then ENTER] on Windows to quit
 
 If the sending device does not get any response from the receiving device, it will quit
 the program. Try increasing the TX gain and run it again.
@@ -185,14 +185,14 @@ the program. Try increasing the TX gain and run it again.
 Link layer frame is embedded within the physical layer frame.
 
 PHY frame contents:
-| Field               | Length     |
-| ------------------- |:-----------|
-| Ramp up             | 8 samples  |
-| Training sequence   | 4 bytes    |
-| Preamble            | 4 bytes    |
-| Link layer frame    | 1009 bytes |
-| Ramp down           | 8 samples  |
-| Total               | 1017 bytes |
+| Field               | Length           |
+| ------------------- |:-----------------|
+| Ramp up             | 8 samples        |
+| Training sequence   | 4 bytes          |
+| Preamble            | 4 bytes          |
+| Link layer frame    | 7 or 1009 bytes  |
+| Ramp down           | 8 samples        |
+| Total               | 15 or 1017 bytes |
 
 Link layer data frame contents:
 | Field                    | Length     |
@@ -218,5 +218,8 @@ negative frequency) around the IQ unit circle. Demodulation is performed by calc
 the phase for each sample based on its IQ angle, and measuring the change in phase over
 the length of the symbol (positive change = positive frequency = 1, negative change =
 negative frequency = 0).
+
+The training sequence allows time for power normalization and any automatic gain control
+to settle.
 
 A preamble is used for synchronization.

@@ -223,43 +223,30 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
         status = -1;
         goto out;
     }
-    sleep(1);
 
-    // //Init phy2
-    // status = bladerf_open(&dev2, dev_id2);
-    // if (status != 0){
-    //     fprintf(stderr, "Couldn't open bladeRF device #2: %s\n", bladerf_strerror(status));
-    //     goto out;
-    // }
-    // params.tx_freq         = tx_freq2;
-    // params.rx_freq         = tx_freq1;
-    // phy2 = phy_init(dev2, &params);
-    // if (phy2 == NULL){
-    //     fprintf(stderr, "Couldn't initialize phy2\n");
-    //     status = -1;
-    //     goto out;
-    // }
-    // sleep(1);
+    //Init phy2
+    status = bladerf_open(&dev2, dev_id2);
+    if (status != 0){
+        fprintf(stderr, "Couldn't open bladeRF device #2: %s\n", bladerf_strerror(status));
+        goto out;
+    }
+    params.tx_freq         = tx_freq2;
+    params.rx_freq         = tx_freq1;
+    phy2 = phy_init(dev2, &params);
+    if (phy2 == NULL){
+        fprintf(stderr, "Couldn't initialize phy2\n");
+        status = -1;
+        goto out;
+    }
 
-    // //Start receiving on phy2
-    // DEBUG_MSG("Starting phy2 receiver\n");
-    // status = phy_start_receiver(phy2);
-    // if (status != 0){
-    //     fprintf(stderr, "Couldn't start phy2 receiver\n");
-    //     goto out;
-    // }
-    // rx_on = true;
-    // sleep(1);
-
-    // //Start receiving on phy1
-    // DEBUG_MSG("Starting phy1 receiver\n");
-    // status = phy_start_receiver(phy1);
-    // if (status != 0){
-    //     fprintf(stderr, "Couldn't start phy1 receiver\n");
-    //     goto out;
-    // }
-    // rx_on = true;
-    // sleep(5);
+    //Start receiving on phy2
+    DEBUG_MSG("Starting phy2 receiver\n");
+    status = phy_start_receiver(phy2);
+    if (status != 0){
+        fprintf(stderr, "Couldn't start phy2 receiver\n");
+        goto out;
+    }
+    rx_on = true;
 
     //Transmit on phy1
     DEBUG_MSG("Starting phy1 transmitter\n");
@@ -269,7 +256,6 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
         goto out;
     }
     tx_on = true;
-    sleep(1);
 
     DEBUG_MSG("Transmitting on phy1\n");
     status = phy_fill_tx_buf(phy1, tx_data, sizeof(tx_data));
@@ -277,46 +263,45 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
         fprintf(stderr, "Couldn't fill tx buffer\n");
         goto out;
     }
-    sleep(6);
 
-    // //Get the received frame from phy2
-    // DEBUG_MSG("Requesting RX buf on phy2\n");
-    // rx_data = phy_request_rx_buf(phy2, 6000);
-    // if (rx_data == NULL){
-    //     fprintf(stderr, "Request buffer failed\n");
-    //     goto out;
-    // }
-    // printf("Received from phy2: ");
-    // //print what is in the buffer
-    // print_chars(&rx_data[1], DATA_FRAME_LENGTH-1);
-    // //Release the rx buffer
-    // phy_release_rx_buf(phy2);
+    //Get the received frame from phy2
+    DEBUG_MSG("Requesting RX buf on phy2\n");
+    rx_data = phy_request_rx_buf(phy2, 6000);
+    if (rx_data == NULL){
+        fprintf(stderr, "Request buffer failed\n");
+        goto out;
+    }
+    printf("Received from phy2: ");
+    //print what is in the buffer
+    print_chars(&rx_data[1], DATA_FRAME_LENGTH-1);
+    //Release the rx buffer
+    phy_release_rx_buf(phy2);
 
 
-    // //Transmit a pseudo random sequence with phy1
-    // tx_data3 = prng_fill(&prng_seed, DATA_FRAME_LENGTH);
-    // tx_data3[0] = 0x00;        //Set frame type to data frame
-    // DEBUG_MSG("Transmitting pseudo random sequence on phy1\n");
-    // status = phy_fill_tx_buf(phy1, tx_data3, DATA_FRAME_LENGTH);
-    // if (status != 0){
-    //     fprintf(stderr, "Couldn't transmit frame\n");
-    //     goto out;
-    // }
-    // sleep(10);
-    // //Receive
-    // rx_data = phy_request_rx_buf(phy2, 2000);
-    // if (rx_data == NULL){
-    //     fprintf(stderr, "Request buffer failed\n");
-    //     goto out;
-    // }
-    // //Compare with transmitted data
-    // if (strncmp((char *)tx_data3, (char *)rx_data, DATA_FRAME_LENGTH) != 0){
-    //     fprintf(stderr, "RX data did not match TX data. Test failed.\n");
-    //     status = -1;
-    // }else{
-    //     printf("RX data matched TX data. Test passed.\n");
-    // }
-    // phy_release_rx_buf(phy2);
+    //Transmit a pseudo random sequence with phy1
+    tx_data3 = prng_fill(&prng_seed, DATA_FRAME_LENGTH);
+    tx_data3[0] = 0x00;        //Set frame type to data frame
+    DEBUG_MSG("Transmitting pseudo random sequence on phy1\n");
+    status = phy_fill_tx_buf(phy1, tx_data3, DATA_FRAME_LENGTH);
+    if (status != 0){
+        fprintf(stderr, "Couldn't transmit frame\n");
+        goto out;
+    }
+
+    //Receive
+    rx_data = phy_request_rx_buf(phy2, 2000);
+    if (rx_data == NULL){
+        fprintf(stderr, "Request buffer failed\n");
+        goto out;
+    }
+    //Compare with transmitted data
+    if (strncmp((char *)tx_data3, (char *)rx_data, DATA_FRAME_LENGTH) != 0){
+        fprintf(stderr, "RX data did not match TX data. Test failed.\n");
+        status = -1;
+    }else{
+        printf("RX data matched TX data. Test passed.\n");
+    }
+    phy_release_rx_buf(phy2);
 
     out:
         ret = status;
@@ -328,18 +313,18 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
             }
         }
         if (rx_on){
-            status = phy_stop_receiver(phy1);
+            status = phy_stop_receiver(phy2);
             if (status != 0){
-                fprintf(stderr, "Couldn't stop phy1 receiver\n");
+                fprintf(stderr, "Couldn't stop phy2 receiver\n");
             }
         }
         free(tx_data3);
         DEBUG_MSG("\tClosing phy1 and phy2\n");
         phy_close(phy1);
-        // phy_close(phy2);
+        phy_close(phy2);
         DEBUG_MSG("\tClosing bladeRFs\n");
         bladerf_close(dev1);
-        // bladerf_close(dev2);
+        bladerf_close(dev2);
         printf("------------ENDING PHY TEST---------------\n");
         return ret;
 }
@@ -406,7 +391,6 @@ int phy_receive_test(void)
         goto out;
     }
     phy_release_rx_buf(phy);
-
 
     out:
         ret = status;
@@ -492,8 +476,10 @@ int fsk_test1(void)
 
     //Check
     if (strcmp((char *)rx_data, (char *)tx_data) != 0){
-        fprintf(stderr, "Received data is incorrect. Test failed.\n");
+        fprintf(stderr, "Received data is incorrect.\nTEST_FAILED.\n");
         status = -1;
+    }else{
+        printf("TEST PASSED.\n");
     }
 
     out:
@@ -524,11 +510,11 @@ int main(int argc, char *argv[])
     dev_id1 = argv[1];
     dev_id2 = argv[2];
 
-    // fsk_test1();
-    // phy_receive_test();
+    fsk_test1();
+    phy_receive_test();
     phy_test(dev_id1, dev_id2, 904000000, 924000000);
-    // phy_test(dev_id2, dev_id1, 904000000, 924000000);
-    // link_test(dev_id1, dev_id2, 904000000, 924000000);
+    phy_test(dev_id2, dev_id1, 904000000, 924000000);
+    link_test(dev_id1, dev_id2, 904000000, 924000000);
 
     return 0;
 }
