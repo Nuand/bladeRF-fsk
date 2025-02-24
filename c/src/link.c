@@ -659,7 +659,8 @@ void *transmit_data_frames(void *arg)
     struct link_handle *link = (struct link_handle *) arg;
     //Set initial sequence number to random value
     srand((unsigned int)time(NULL));
-    seq_num = rand() % 65536;
+    // seq_num = rand() % 65536;
+    seq_num = 56444;    //--DEBUG
     DEBUG_MSG("[LINK] TX: Initial seq num = %hu\n", seq_num);
     tries = 1;
 
