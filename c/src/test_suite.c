@@ -41,18 +41,20 @@
 /**
  * Test link layer code with data transfer between two devices
  */
-int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_frequency tx_freq2)
+int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_frequency tx_freq2, 
+              bladerf_gain tx_gain, bladerf_gain rx_gain)
 {
     struct link_handle *link1 = NULL;
     struct link_handle *link2 = NULL;
     int status = 0;
     int bytes_received;
-    uint8_t tx_data[900];
-    uint8_t tx_data2[900] = "Another message";
-    uint8_t rx_data[900];
+    uint8_t tx_data[PAYLOAD_LENGTH];
+    uint8_t tx_data2[PAYLOAD_LENGTH] = "Another message";
+    uint8_t rx_data[PAYLOAD_LENGTH];
     struct radio_params params;
     struct bladerf *dev1 = NULL, *dev2 = NULL;
     char *result;
+    bool passed = 1;
 
     printf("------------BEGINNING LINK TEST-----------\n");
     //Open bladeRFs
@@ -67,6 +69,8 @@ int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_
         goto out;
     }
 
+    //link1 -> link2
+    printf("Sending a message from link1->link2...\n");
     //Zero the tx_data buffer
     memset((void *)tx_data, 0, sizeof(tx_data));
     //Prompt for a string
@@ -84,17 +88,17 @@ int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_
     params.tx_chan         = 0;
     params.tx_vga1_gain    = -4;
     params.tx_vga2_gain    = 0;
-    params.tx_use_unified  = 0;
-    params.tx_unified_gain = 0;
+    params.tx_use_unified  = 1;
+    params.tx_unified_gain = tx_gain;
     params.tx_biastee      = 0;
 
     params.rx_freq         = tx_freq2;
     params.rx_chan         = 0;
-    params.rx_lna_gain     = BLADERF_LNA_GAIN_BYPASS; //BLADERF_LNA_GAIN_MAX;
-    params.rx_vga1_gain    = 5; //23;
+    params.rx_lna_gain     = BLADERF_LNA_GAIN_MAX;
+    params.rx_vga1_gain    = 23;
     params.rx_vga2_gain    = 0;
-    params.rx_use_unified  = 0;
-    params.rx_unified_gain = 0;
+    params.rx_use_unified  = 1;
+    params.rx_unified_gain = rx_gain;
     params.rx_biastee      = 0;
     params.rx_agc          = 0;
 
@@ -125,13 +129,22 @@ int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_
     bytes_received = link_receive_data(link2, (int)strlen((char *)tx_data) + 1, 5, rx_data);
     if (bytes_received < 0){
         fprintf(stderr, "Couldn't receive data with link2\n");
+        status = -1;
         goto out;
     }else if (bytes_received != (int)(strlen((char *) tx_data) + 1)){
         fprintf(stderr, "link2 receive timed out\n");
+        status = -1;
         goto out;
     }
     printf("Received on link2: '%s'\n", rx_data);
+    if (strncmp((char *)rx_data, (char *)tx_data, sizeof(tx_data)) != 0){
+        fprintf(stderr, "   RX data did not match TX data");
+        passed = 0;
+    }
+
+    // link1 -> link2
     //Transmit with link1
+    printf("Sending another message from link1->link2...\n");
     status = link_send_data(link1, tx_data2, sizeof(tx_data2));
     if (status != 0){
         fprintf(stderr, "Couldn't send data with link1\n");
@@ -139,15 +152,21 @@ int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_
     }
 
     //Receive with link2
-    bytes_received = link_receive_data(link2, 900, 5, rx_data);
+    bytes_received = link_receive_data(link2, sizeof(tx_data2), 5, rx_data);
     if (bytes_received < 0){
         fprintf(stderr, "Couldn't receive data with link2\n");
+        status = -1;
         goto out;
-    }else if (bytes_received != 900){
+    }else if (bytes_received != sizeof(tx_data2)){
         fprintf(stderr, "link2 receive timed out\n");
+        status = -1;
         goto out;
     }
     printf("Received on link2: '%s'\n", rx_data);
+    if (memcmp(rx_data, tx_data2, sizeof(tx_data2)) != 0){
+        fprintf(stderr, "   RX data did not match TX data");
+        passed = 0;
+    }
 
     out:
         DEBUG_MSG("Closing link 1\n");
@@ -157,6 +176,13 @@ int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_
         DEBUG_MSG("Closing bladeRFs\n");
         bladerf_close(dev1);
         bladerf_close(dev2);
+        if (!passed || status != 0){
+            status = -1;
+            printf("\nTEST FAILED\n");
+        }else{
+            status = 0;
+            printf("\nTEST PASSED\n");
+        }
         printf("------------ENDING LINK TEST--------------\n");
         return status;
 }
@@ -164,12 +190,13 @@ int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_
 /**
  * Test phy layer code with data transfer between two devices
  */
-int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_frequency tx_freq2)
+int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_frequency tx_freq2,
+             bladerf_gain tx_gain, bladerf_gain rx_gain)
 {
     struct phy_handle *phy1 = NULL;
     struct phy_handle *phy2 = NULL;
     uint8_t tx_data[DATA_FRAME_LENGTH];
-    uint8_t *tx_data3 = NULL;
+    uint8_t *tx_data2 = NULL;
     uint8_t *rx_data;
     uint64_t prng_seed = 29398283513841632;
     int status = 0, ret;
@@ -177,14 +204,17 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
     struct radio_params params;
     struct bladerf *dev1 = NULL, *dev2 = NULL;
     char *result;
+    bool passed = 1;
 
     printf("------------BEGINNING PHY TEST------------\n");
+    //phy1 -> phy2
+    printf("Transmitting a message from phy1->phy2...\n");
     //Zero the tx_data buffer
     memset(tx_data, 0, sizeof(tx_data));
     //Set first byte to data frame code
     tx_data[0] = DATA_FRAME_CODE;
     //Prompt for a string
-    printf("Enter a string to tx using phy1 (frame #1): ");
+    printf("Enter a string to tx using phy1: ");
     result = fgets((char *) &tx_data[1], sizeof(tx_data)-1, stdin);
     if (result == NULL){
         status = -1;
@@ -203,17 +233,17 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
     params.tx_chan         = 0;
     params.tx_vga1_gain    = -4;
     params.tx_vga2_gain    = 0;
-    params.tx_use_unified  = 0;
-    params.tx_unified_gain = 0;
+    params.tx_use_unified  = 1;
+    params.tx_unified_gain = tx_gain;
     params.tx_biastee      = 0;
 
     params.rx_freq         = tx_freq2;
     params.rx_chan         = 0;
-    params.rx_lna_gain     = BLADERF_LNA_GAIN_BYPASS; //BLADERF_LNA_GAIN_MAX;
-    params.rx_vga1_gain    = 5; //23;
+    params.rx_lna_gain     = BLADERF_LNA_GAIN_MAX;
+    params.rx_vga1_gain    = 23;
     params.rx_vga2_gain    = 0;
-    params.rx_use_unified  = 0;
-    params.rx_unified_gain = 0;
+    params.rx_use_unified  = 1;
+    params.rx_unified_gain = rx_gain;
     params.rx_biastee      = 0;
     params.rx_agc          = 0;
 
@@ -269,6 +299,7 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
     rx_data = phy_request_rx_buf(phy2, 6000);
     if (rx_data == NULL){
         fprintf(stderr, "Request buffer failed\n");
+        status = -1;
         goto out;
     }
     printf("Received from phy2: ");
@@ -276,13 +307,18 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
     print_chars(&rx_data[1], DATA_FRAME_LENGTH-1);
     //Release the rx buffer
     phy_release_rx_buf(phy2);
+    //Compare with transmitted data
+    if (memcmp(rx_data, tx_data, DATA_FRAME_LENGTH) != 0){
+        fprintf(stderr, "   RX data did not match TX data");
+        passed = 0;
+    }
 
-
+    //phy1 -> phy2
     //Transmit a pseudo random sequence with phy1
-    tx_data3 = prng_fill(&prng_seed, DATA_FRAME_LENGTH);
-    tx_data3[0] = 0x00;        //Set frame type to data frame
-    DEBUG_MSG("Transmitting pseudo random sequence on phy1\n");
-    status = phy_fill_tx_buf(phy1, tx_data3, DATA_FRAME_LENGTH);
+    printf("Transmitting pseudo random sequence from phy1->phy2...\n");
+    tx_data2    = prng_fill(&prng_seed, DATA_FRAME_LENGTH);
+    tx_data2[0] = DATA_FRAME_CODE;        //Set frame type to data frame
+    status = phy_fill_tx_buf(phy1, tx_data2, DATA_FRAME_LENGTH);
     if (status != 0){
         fprintf(stderr, "Couldn't transmit frame\n");
         goto out;
@@ -292,16 +328,15 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
     rx_data = phy_request_rx_buf(phy2, 2000);
     if (rx_data == NULL){
         fprintf(stderr, "Request buffer failed\n");
+        status = -1;
         goto out;
     }
-    //Compare with transmitted data
-    if (strncmp((char *)tx_data3, (char *)rx_data, DATA_FRAME_LENGTH) != 0){
-        fprintf(stderr, "RX data did not match TX data. Test failed.\n");
-        status = -1;
-    }else{
-        printf("RX data matched TX data. Test passed.\n");
-    }
     phy_release_rx_buf(phy2);
+    //Compare with transmitted data
+    if (memcmp(rx_data, tx_data2, DATA_FRAME_LENGTH) != 0){
+        fprintf(stderr, "   RX data did not match TX data");
+        passed = 0;
+    }
 
     out:
         ret = status;
@@ -318,13 +353,20 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
                 fprintf(stderr, "Couldn't stop phy2 receiver\n");
             }
         }
-        free(tx_data3);
+        free(tx_data2);
         DEBUG_MSG("\tClosing phy1 and phy2\n");
         phy_close(phy1);
         phy_close(phy2);
         DEBUG_MSG("\tClosing bladeRFs\n");
         bladerf_close(dev1);
         bladerf_close(dev2);
+        if (!passed || ret != 0 || status != 0){
+            ret = -1;
+            printf("\nTEST FAILED\n");
+        }else{
+            ret  = 0;
+            printf("\nTEST PASSED\n");
+        }
         printf("------------ENDING PHY TEST---------------\n");
         return ret;
 }
@@ -333,7 +375,7 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
  * Test phy receiver thread to see if it's using too much CPU. If ENABLE_NOTES is
  * defined, overrun messages will be seen if the PHY receiver is at ~100% CPU.
  */
-int phy_receive_test(void)
+int phy_receive_test(bladerf_gain tx_gain, bladerf_gain rx_gain)
 {
     struct phy_handle *phy = NULL;
     uint8_t *rx_data;
@@ -354,17 +396,17 @@ int phy_receive_test(void)
     params.tx_chan         = 0;
     params.tx_vga1_gain    = -4;
     params.tx_vga2_gain    = 0;
-    params.tx_use_unified  = 0;
+    params.tx_use_unified  = 1;
     params.tx_unified_gain = 0;
     params.tx_biastee      = 0;
 
     params.rx_freq         = 924000000;
     params.rx_chan         = 0;
-    params.rx_lna_gain     = BLADERF_LNA_GAIN_BYPASS; //BLADERF_LNA_GAIN_MAX;
-    params.rx_vga1_gain    = 5; //23;
+    params.rx_lna_gain     = BLADERF_LNA_GAIN_MAX;
+    params.rx_vga1_gain    = 23;
     params.rx_vga2_gain    = 0;
-    params.rx_use_unified  = 0;
-    params.rx_unified_gain = 0;
+    params.rx_use_unified  = 1;
+    params.rx_unified_gain = 30;
     params.rx_biastee      = 0;
     params.rx_agc          = 0;
 
@@ -405,6 +447,11 @@ int phy_receive_test(void)
         phy_close(phy);
         DEBUG_MSG("\tClosing bladeRF\n");
         bladerf_close(dev);
+        if (ret != 0){
+            printf("\nTEST FAILED\n");
+        }else{
+            printf("\nTEST PASSED\n");
+        }
         printf("------------ENDING PHY RECEIVE TEST---------------\n");
         return ret;
 }
@@ -427,6 +474,7 @@ int fsk_test1(void)
     unsigned int num_samples_rx2;
     int status = 0;
     uint8_t rx_data[512];
+    bool passed = 1;
 
     printf("------------BEGINNING FSK TEST 1-------------\n");
     //Open fsk handle
@@ -476,17 +524,19 @@ int fsk_test1(void)
 
     //Check
     if (strcmp((char *)rx_data, (char *)tx_data) != 0){
-        fprintf(stderr, "Received data is incorrect.\nTEST_FAILED.\n");
-        status = -1;
-    }else{
-        printf("TEST PASSED.\n");
+        fprintf(stderr, "   RX data did not match TX data\n");
+        passed = 0;
     }
 
     out:
         free(tx_samples);
         fsk_close(fsk);
-        if (status != 0){
-            fprintf(stderr, "ERROR: Test did not complete successfully\n");
+        if (!passed || status != 0){
+            status = -1;
+            printf("\nTEST FAILED\n");
+        }else{
+            status = 0;
+            printf("\nTEST PASSED\n");
         }
         printf("------------ENDING FSK TEST 1----------------\n");
         return status;
@@ -499,22 +549,57 @@ int main(int argc, char *argv[])
 {
     char *dev_id1;
     char *dev_id2;
+    bladerf_gain tx_gain;
+    bladerf_gain rx_gain;
+    int status;
+    bool passed = 1;
 
     //Parse arguments
-    if (argc < 3){
-        fprintf(stderr, "Usage: %s [bladeRF device ID 1] [bladeRF device ID 2]\n",
-                argv[0]);
+    if (argc < 5){
+        fprintf(stderr, "Usage: %s [bladeRF device ID 1] [bladeRF device ID 2] [TX unified gain] [RX unified gain]\n"
+                        "   Ex: %s *:serial=00 *:serial=8a 45 20\n",
+                argv[0], argv[0]);
         return 0;
     }
 
     dev_id1 = argv[1];
     dev_id2 = argv[2];
+    tx_gain = (bladerf_gain)atoi(argv[3]);
+    rx_gain = (bladerf_gain)atoi(argv[4]);
 
-    fsk_test1();
-    phy_receive_test();
-    phy_test(dev_id1, dev_id2, 904000000, 924000000);
-    phy_test(dev_id2, dev_id1, 904000000, 924000000);
-    link_test(dev_id1, dev_id2, 904000000, 924000000);
+
+    status = fsk_test1();
+    if (status != 0){
+        passed = 0;
+    }
+
+    status = phy_receive_test(tx_gain, rx_gain);
+    if (status != 0){
+        passed = 0;
+    }
+    sleep(5);
+
+    status = phy_test(dev_id1, dev_id2, 904000000, 924000000, tx_gain, rx_gain);
+    if (status != 0){
+        passed = 0;
+    }
+    sleep(5);
+
+    status = phy_test(dev_id2, dev_id1, 904000000, 924000000, tx_gain, rx_gain);
+    if (status != 0){
+        passed = 0;
+    }
+
+    status = link_test(dev_id1, dev_id2, 904000000, 924000000, tx_gain, rx_gain);
+    if (status != 0){
+        passed = 0;
+    }
+
+    if (!passed){
+        printf("\nTESTS FAILED\n");
+    }else{
+        printf("\nTESTS PASSED\n");
+    }
 
     return 0;
 }
