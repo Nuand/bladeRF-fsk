@@ -48,6 +48,7 @@
 
 #include "common.h"
 #include "utils.h"
+#include "link.h" //for link layer payload size defintions
 
 //Training sequence which goes at the start of every frame
 //Note: In order for the preamble waveform not to be messed up, the last
@@ -62,9 +63,6 @@
 //Byte codes for data/ack frame
 #define DATA_FRAME_CODE 0x00
 #define ACK_FRAME_CODE 0xFF
-//Frame lengths
-#define DATA_FRAME_LENGTH 160+9  //link.h PAYLOAD_LENGTH + 9
-#define ACK_FRAME_LENGTH 7
 //Maximum frame size in bytes
 #define MAX_LINK_FRAME_SIZE DATA_FRAME_LENGTH
 //Seed for pseudorandom number sequence generator
