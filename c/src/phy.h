@@ -126,7 +126,8 @@ int phy_start_receiver(struct phy_handle *phy);
  * 
  * @param[in]   phy     pointer to phy_handle struct
  *
- * @return      0 on success, -1 on failure
+ * @return      0 on success,-1 on failure,
+ *              1 if RX overruns were experienced (but otherwise successful)
  */
 int phy_stop_receiver(struct phy_handle *phy);
 

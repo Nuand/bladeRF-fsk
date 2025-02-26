@@ -324,7 +324,11 @@ void link_close(struct link_handle *link)
             if (link->phy_rx_on){
                 status = phy_stop_receiver(link->phy);
                 if (status != 0){
-                    fprintf(stderr, "[LINK] Error stopping phy receiver\n");
+                    if (status == 1){
+                        fprintf(stderr, "[LINK] Warning: RX overruns were detected\n");
+                    }else{
+                        fprintf(stderr, "[LINK] Error stopping phy receiver\n");
+                    }
                 }
             }
         }

@@ -58,36 +58,37 @@
 
 //Internal structs
 struct rx {
-    int16_t *in_samples;        //Raw input samples from device
+    int16_t *in_samples;                    //Raw input samples from device
     struct fir_filter *ch_filt;             //Channel filter
     struct pnorm_state_t *pnorm;            //Power normalizer
     struct correlator *corr;                //Correlator
     struct complex_sample *filt_samples;    //Filtered input samples
-    struct complex_sample *pnorm_samples;    //power normalized samples
-    uint8_t *data_buf;            //received data output buffer (no training seq/preamble)
+    struct complex_sample *pnorm_samples;   //power normalized samples
+    uint8_t *data_buf;          //received data output buffer (no training seq/preamble)
     bool buf_filled;            //is the rx data buffer filled
-    bool stop;                    //control variable to stop the receiver
-    pthread_t thread;            //pthread for the receiver
-    pthread_cond_t buf_filled_cond;        //condition variable for buf_filled
+    bool stop;                  //control variable to stop the receiver
+    pthread_t thread;           //pthread for the receiver
+    pthread_cond_t buf_filled_cond;     //condition variable for buf_filled
     pthread_mutex_t buf_status_lock;    //mutex variable for accessing buf_filled
+    bool overrun;               //True if receiver experienced RX sample overruns
 };
 struct tx {
-    uint8_t *data_buf;            //input data to transmit (including training seq/preamble)
-    unsigned int data_length;    //length of data to transmit (not including preamble)
+    uint8_t *data_buf;          //input data to transmit (including training seq/preamble)
+    unsigned int data_length;   //length of data to transmit (not including preamble)
     bool buf_filled;
     bool stop;
     pthread_t thread;
     pthread_cond_t buf_filled_cond;
     pthread_mutex_t buf_status_lock;
-    unsigned int max_num_samples;        //Maximum number of tx samples to transmit
-    struct complex_sample *samples;        //output samples to transmit
+    unsigned int max_num_samples;       //Maximum number of tx samples to transmit
+    struct complex_sample *samples;     //output samples to transmit
 };
 
 struct phy_handle {
-    struct bladerf *dev;        //bladeRF device handle
-    struct fsk_handle *fsk;        //fsk handle
-    struct tx *tx;                //tx data structure
-    struct rx *rx;                //rx data structure
+    struct bladerf *dev;            //bladeRF device handle
+    struct fsk_handle *fsk;         //fsk handle
+    struct tx *tx;                  //tx data structure
+    struct rx *rx;                  //rx data structure
     uint8_t *scrambling_sequence;
 };
 
@@ -667,7 +668,9 @@ int phy_start_receiver(struct phy_handle *phy)
     int status;
 
     //turn off stop signal
-    phy->rx->stop = false;
+    phy->rx->stop    = false;
+    //reset debug status
+    phy->rx->overrun = false;
     //Kick off frame receiver thread
     status = pthread_create(&(phy->rx->thread), NULL, phy_receive_frames, phy);
     if (status != 0){
@@ -693,7 +696,11 @@ int phy_stop_receiver(struct phy_handle *phy)
         return -1;
     }
     DEBUG_MSG("[PHY] RX: Receiver stopped\n");
-    return 0;
+    if (phy->rx->overrun){
+        return 1;   //warning: RX overruns were detected
+    }else{
+        return 0;
+    }
 }
 
 uint8_t *phy_request_rx_buf(struct phy_handle *phy, unsigned int timeout_ms)
@@ -779,7 +786,9 @@ void *phy_receive_frames(void *arg)
     uint8_t frame_type;
     struct bladerf_metadata metadata;            //bladerf metadata for sync_rx()
     unsigned int num_bytes_to_demod = 0;
-    uint64_t timestamp = UINT64_MAX;
+    #ifndef SYNC_NO_METADATA
+        uint64_t timestamp = UINT64_MAX;
+    #endif
 
     enum states {RECEIVE, PREAMBLE_CORRELATE, DEMOD,
                     CHECK_FRAME_TYPE, DECODE, COPY};
@@ -840,6 +849,7 @@ void *phy_receive_frames(void *arg)
                         NOTE("[PHY] %s: Got an overrun. Expected count = %u;"
                                     " actual count = %u. Skipping these samples.\n",
                                     __FUNCTION__, NUM_SAMPLES_RX, metadata.actual_count);
+                        phy->rx->overrun = true;
                         break;
                     }
                     if (timestamp != UINT64_MAX && metadata.timestamp != timestamp+NUM_SAMPLES_RX){

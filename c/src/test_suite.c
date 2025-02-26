@@ -138,7 +138,7 @@ int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_
     }
     printf("Received on link2: '%s'\n", rx_data);
     if (strncmp((char *)rx_data, (char *)tx_data, sizeof(tx_data)) != 0){
-        fprintf(stderr, "   RX data did not match TX data");
+        fprintf(stderr, "   ERROR: RX data did not match TX data");
         passed = 0;
     }
 
@@ -164,7 +164,7 @@ int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_
     }
     printf("Received on link2: '%s'\n", rx_data);
     if (memcmp(rx_data, tx_data2, sizeof(tx_data2)) != 0){
-        fprintf(stderr, "   RX data did not match TX data");
+        fprintf(stderr, "   ERROR: RX data did not match TX data");
         passed = 0;
     }
 
@@ -298,7 +298,7 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
     DEBUG_MSG("Requesting RX buf on phy2\n");
     rx_data = phy_request_rx_buf(phy2, 6000);
     if (rx_data == NULL){
-        fprintf(stderr, "Request buffer failed\n");
+        fprintf(stderr, "ERROR: Request buffer failed\n");
         status = -1;
         goto out;
     }
@@ -309,7 +309,7 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
     phy_release_rx_buf(phy2);
     //Compare with transmitted data
     if (memcmp(rx_data, tx_data, DATA_FRAME_LENGTH) != 0){
-        fprintf(stderr, "   RX data did not match TX data");
+        fprintf(stderr, "   ERROR: RX data did not match TX data");
         passed = 0;
     }
 
@@ -327,14 +327,14 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
     //Receive
     rx_data = phy_request_rx_buf(phy2, 2000);
     if (rx_data == NULL){
-        fprintf(stderr, "Request buffer failed\n");
+        fprintf(stderr, "ERROR: Request buffer failed\n");
         status = -1;
         goto out;
     }
     phy_release_rx_buf(phy2);
     //Compare with transmitted data
     if (memcmp(rx_data, tx_data2, DATA_FRAME_LENGTH) != 0){
-        fprintf(stderr, "   RX data did not match TX data");
+        fprintf(stderr, "   ERROR: RX data did not match TX data");
         passed = 0;
     }
 
@@ -350,7 +350,11 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
         if (rx_on){
             status = phy_stop_receiver(phy2);
             if (status != 0){
-                fprintf(stderr, "Couldn't stop phy2 receiver\n");
+                if (status == 1){
+                    fprintf(stderr, "WARNING: RX overruns were detected on PHY receiver\n");
+                }else{
+                    fprintf(stderr, "Couldn't stop phy2 receiver\n");
+                }
             }
         }
         free(tx_data2);
@@ -375,7 +379,7 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
  * Test phy receiver thread to see if it's using too much CPU. If ENABLE_NOTES is
  * defined, overrun messages will be seen if the PHY receiver is at ~100% CPU.
  */
-int phy_receive_test(bladerf_gain tx_gain, bladerf_gain rx_gain)
+int phy_receive_test(void)
 {
     struct phy_handle *phy = NULL;
     uint8_t *rx_data;
@@ -391,6 +395,16 @@ int phy_receive_test(bladerf_gain tx_gain, bladerf_gain rx_gain)
         fprintf(stderr, "Couldn't open bladeRF device: %s\n", bladerf_strerror(status));
         goto out;
     }
+    #ifdef DEBUG_MODE
+        //print serial number
+        struct bladerf_serial sn;
+        status = bladerf_get_serial_struct(dev, &sn);
+        if (status != 0){
+            fprintf(stderr, "Couldn't get device serial number: %s\n", bladerf_strerror(status));
+            goto out;
+        }
+        DEBUG_MSG("bladeRF serial#: %s\n", sn.serial);
+    #endif
 
     params.tx_freq         = 904000000;
     params.tx_chan         = 0;
@@ -440,7 +454,12 @@ int phy_receive_test(bladerf_gain tx_gain, bladerf_gain rx_gain)
         if (rx_on){
             status = phy_stop_receiver(phy);
             if (status != 0){
-                fprintf(stderr, "Couldn't stop phy receiver\n");
+                if (status == 1){
+                    fprintf(stderr, "ERROR: RX overruns were detected on PHY receiver\n");
+                    ret = status;
+                }else{
+                    fprintf(stderr, "Couldn't stop phy receiver\n");
+                }
             }
         }
         DEBUG_MSG("\tClosing phy\n");
@@ -524,7 +543,7 @@ int fsk_test1(void)
 
     //Check
     if (strcmp((char *)rx_data, (char *)tx_data) != 0){
-        fprintf(stderr, "   RX data did not match TX data\n");
+        fprintf(stderr, "   ERROR: RX data did not match TX data\n");
         passed = 0;
     }
 
@@ -573,18 +592,19 @@ int main(int argc, char *argv[])
         passed = 0;
     }
 
-    status = phy_receive_test(tx_gain, rx_gain);
+    status = phy_receive_test();
     if (status != 0){
         passed = 0;
     }
-    sleep(5);
+    status = phy_receive_test();
+    if (status != 0){
+        passed = 0;
+    }
 
     status = phy_test(dev_id1, dev_id2, 904000000, 924000000, tx_gain, rx_gain);
     if (status != 0){
         passed = 0;
     }
-    sleep(5);
-
     status = phy_test(dev_id2, dev_id1, 904000000, 924000000, tx_gain, rx_gain);
     if (status != 0){
         passed = 0;
