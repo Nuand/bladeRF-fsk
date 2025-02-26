@@ -139,7 +139,8 @@ int phy_stop_receiver(struct phy_handle *phy);
  * @param[in]   phy             pointer to phy_handle struct
  * @param[in]   timeout_ms      amount of time to wait for a buffer from the PHY
  *
- * @return      pointer to filled buffer with received frame inside
+ * @return      pointer to filled buffer with received frame inside on success,
+ *              NULL on failure/timeout
  */
 uint8_t *phy_request_rx_buf(struct phy_handle *phy, unsigned int timeout_ms);
 

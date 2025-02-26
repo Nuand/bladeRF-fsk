@@ -1107,6 +1107,7 @@ void *receive_frames(void *arg)
                         //Instead of causing a disruption, drop the current frame
                         fprintf(stderr, "[LINK] RX: Data frame dropped!\n");
                         phy_release_rx_buf(link->phy);
+                        state = WAIT;
                         break;
                     }
                     //Copy/convert to data frame struct
@@ -1154,6 +1155,7 @@ void *receive_frames(void *arg)
                         //Instead of causing a disruption, drop the current frame
                         fprintf(stderr, "[LINK] RX: ACK frame dropped!\n");
                         phy_release_rx_buf(link->phy);
+                        state = WAIT;
                         break;
                     }
                     //Copy/convert to ack frame struct and mark ack buffer filled

@@ -144,7 +144,7 @@ int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_
 
     // link1 -> link2
     //Transmit with link1
-    printf("Sending another message from link1->link2...\n");
+    printf("\nSending another message from link1->link2...\n");
     status = link_send_data(link1, tx_data2, sizeof(tx_data2));
     if (status != 0){
         fprintf(stderr, "Couldn't send data with link1\n");
@@ -315,7 +315,7 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
 
     //phy1 -> phy2
     //Transmit a pseudo random sequence with phy1
-    printf("Transmitting pseudo random sequence from phy1->phy2...\n");
+    printf("\nTransmitting pseudo random sequence from phy1->phy2...\n");
     tx_data2    = prng_fill(&prng_seed, DATA_FRAME_LENGTH);
     tx_data2[0] = DATA_FRAME_CODE;        //Set frame type to data frame
     status = phy_fill_tx_buf(phy1, tx_data2, DATA_FRAME_LENGTH);

@@ -61,6 +61,7 @@ void corr_reset(struct correlator *corr);
 /**
  * Process samples and return timestamp of when correlation occurred
  *
+ * @param   corr        Pointer to correlator handle struct
  * @param   samples     Samples to process
  * @param   n           Number of provided samples
  * @param   timestamp   Timestamp of first samples in `samples`

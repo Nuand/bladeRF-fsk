@@ -896,7 +896,7 @@ void *phy_receive_frames(void *arg)
                 //DEBUG_MSG("[PHY] RX: State = PREAMBLE_CORRELATE\n");
                 samples_index = corr_process(phy->rx->corr,
                                             &(phy->rx->pnorm_samples[samples_index]),
-                                            (size_t) (NUM_SAMPLES_RX-samples_index), 0);
+                                            (size_t) (NUM_SAMPLES_RX-samples_index), samples_index);
                 if (samples_index != CORRELATOR_NO_RESULT){
                     DEBUG_MSG("[PHY] RX: Preamble matched @ index %lu\n", samples_index);
                     preamble_detected = true;
