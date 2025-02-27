@@ -29,7 +29,7 @@
 #include "utils.h"
 
 #ifdef DEBUG_MODE
-    #define DEBUG_MSG(...) fprintf(stderr, __VA_ARGS__)
+    #define DEBUG_MSG(...) fprintf(stderr, "[LINK] " __VA_ARGS__)
     #ifndef ENABLE_NOTES
         #define ENABLE_NOTES
     #endif
@@ -38,10 +38,12 @@
 #endif
 
 #ifdef ENABLE_NOTES
-    #define NOTE(...) fprintf(stderr, __VA_ARGS__)
+    #define NOTE(...) fprintf(stderr, "[LINK] " __VA_ARGS__)
 #else
     #define NOTE(...)
 #endif
+
+#define ERROR(...) fprintf(stderr, "[LINK] " __VA_ARGS__)
 
 /********************************************
  *                                          *
@@ -137,7 +139,7 @@ struct link_handle *link_init(struct bladerf *dev, struct radio_params *params)
     int status;
     struct link_handle *link;
 
-    DEBUG_MSG("[LINK] Initializing\n");
+    DEBUG_MSG("Initializing\n");
     //-------------Allocate memory for link handle struct--------------
     //Calloc so all pointers are initialized to NULL, and all bools are
     //initialized to false
@@ -150,20 +152,20 @@ struct link_handle *link_init(struct bladerf *dev, struct radio_params *params)
     //---------------Open/Initialize phy handle--------------------------
     link->phy = phy_init(dev, params);
     if (link->phy == NULL){
-        fprintf(stderr, "[LINK] Couldn't initialize phy handle\n");
+        ERROR("Couldn't initialize phy handle\n");
         goto error;
     }
     //Start phy receiver
     status = phy_start_receiver(link->phy);
     if (status != 0){
-        fprintf(stderr, "[LINK] Couldn't start phy recevier\n");
+        ERROR("Couldn't start phy recevier\n");
         goto error;
     }
     link->phy_rx_on = true;
     //Start phy transmitter
     status = phy_start_transmitter(link->phy);
     if (status != 0){
-        fprintf(stderr, "[LINK] Couldn't start phy transmitter\n");
+        ERROR("Couldn't start phy transmitter\n");
         goto error;
     }
     link->phy_tx_on = true;
@@ -183,15 +185,13 @@ struct link_handle *link_init(struct bladerf *dev, struct radio_params *params)
     //Initialize pthread condition variable
     status = pthread_cond_init(&(link->tx->data_buf_filled_cond), NULL);
     if (status != 0){
-        fprintf(stderr, "[LINK] Error initializing pthread_cond: %s\n",
-                    strerror(status));
+        ERROR("Error initializing pthread_cond: %s\n", strerror(status));
         goto error;
     }
     //Initialize pthread mutex variable
     status = pthread_mutex_init(&(link->tx->data_buf_status_lock), NULL);
     if (status != 0){
-        fprintf(stderr, "[LINK] Error initializing pthread_mutex: %s\n",
-                    strerror(status));
+        ERROR("Error initializing pthread_mutex: %s\n", strerror(status));
         goto error;
     }
     //------------------Allocate memory for rx struct and initialize-----
@@ -203,29 +203,25 @@ struct link_handle *link_init(struct bladerf *dev, struct radio_params *params)
     //Initialize pthread condition variable for data
     status = pthread_cond_init(&(link->rx->data_buf_filled_cond), NULL);
     if (status != 0){
-        fprintf(stderr, "[LINK] Error initializing pthread_cond: %s\n",
-                    strerror(status));
+        ERROR("Error initializing pthread_cond: %s\n", strerror(status));
         goto error;
     }
     //Initialize pthread mutex variable for data
     status = pthread_mutex_init(&(link->rx->data_buf_status_lock), NULL);
     if (status != 0){
-        fprintf(stderr, "[LINK] Error initializing pthread_mutex: %s\n",
-                    strerror(status));
+        ERROR("Error initializing pthread_mutex: %s\n", strerror(status));
         goto error;
     }
     //Initialize pthread condition variable for ack
     status = pthread_cond_init(&(link->rx->ack_buf_filled_cond), NULL);
     if (status != 0){
-        fprintf(stderr, "[LINK] Error initializing pthread_cond: %s\n",
-                    strerror(status));
+        ERROR("Error initializing pthread_cond: %s\n", strerror(status));
         goto error;
     }
     //Initialize pthread mutex variable for ack
     status = pthread_mutex_init(&(link->rx->ack_buf_status_lock), NULL);
     if (status != 0){
-        fprintf(stderr, "[LINK] Error initializing pthread_mutex: %s\n",
-                    strerror(status));
+        ERROR("Error initializing pthread_mutex: %s\n", strerror(status));
         goto error;
     }
     //Initialize control/state variables
@@ -238,19 +234,19 @@ struct link_handle *link_init(struct bladerf *dev, struct radio_params *params)
     //---------------------Start the link receiver--------------------------
     status = start_receiver(link);
     if (status != 0){
-        fprintf(stderr, "[LINK] Couldn't start receiver\n");
+        ERROR("Couldn't start receiver\n");
         goto error;
     }
     link->rx->link_on = true;
     //-------------------Start the link transmitter-------------------------
     status = start_transmitter(link);
     if (status != 0){
-        fprintf(stderr, "[LINK] Couldn't start receiver\n");
+        ERROR("Couldn't start receiver\n");
         goto error;
     }
     link->tx->link_on = true;
 
-    DEBUG_MSG("[LINK] Initialization done\n");
+    DEBUG_MSG("Initialization done\n");
     return link;
 
     error:
@@ -262,7 +258,7 @@ void link_close(struct link_handle *link)
 {
     int status;
 
-    DEBUG_MSG("[LINK] Closing\n");
+    DEBUG_MSG("Closing\n");
 
     //Cleanup all internal resources
     if (link != NULL){
@@ -272,16 +268,16 @@ void link_close(struct link_handle *link)
             if (link->tx->link_on){
                 status = stop_transmitter(link);
                 if (status != 0){
-                    fprintf(stderr, "[LINK] Error stopping link transmitter\n");
+                    ERROR("Error stopping link transmitter\n");
                 }
             }
             status = pthread_mutex_destroy(&(link->tx->data_buf_status_lock));
             if (status != 0){
-                fprintf(stderr, "[LINK] Error destroying pthread_mutex\n");
+                ERROR("Error destroying pthread_mutex\n");
             }
             status = pthread_cond_destroy(&(link->tx->data_buf_filled_cond));
             if (status != 0){
-                fprintf(stderr, "[LINK] Error destroying pthread_cond\n");
+                ERROR("Error destroying pthread_cond\n");
             }
         }
         free(link->tx);
@@ -291,24 +287,24 @@ void link_close(struct link_handle *link)
             if (link->rx->link_on){
                 status = stop_receiver(link);
                 if (status != 0){
-                    fprintf(stderr, "[LINK] Error stopping link receiver\n");
+                    ERROR("Error stopping link receiver\n");
                 }
             }
             status = pthread_mutex_destroy(&(link->rx->data_buf_status_lock));
             if (status != 0){
-                fprintf(stderr, "[LINK] Error destroying pthread_mutex\n");
+                ERROR("Error destroying pthread_mutex\n");
             }
             status = pthread_cond_destroy(&(link->rx->data_buf_filled_cond));
             if (status != 0){
-                fprintf(stderr, "[LINK] Error destroying pthread_cond\n");
+                ERROR("Error destroying pthread_cond\n");
             }
             status = pthread_mutex_destroy(&(link->rx->ack_buf_status_lock));
             if (status != 0){
-                fprintf(stderr, "[LINK] Error destroying pthread_mutex\n");
+                ERROR("Error destroying pthread_mutex\n");
             }
             status = pthread_cond_destroy(&(link->rx->ack_buf_filled_cond));
             if (status != 0){
-                fprintf(stderr, "[LINK] Error destroying pthread_cond\n");
+                ERROR("Error destroying pthread_cond\n");
             }
         }
         free(link->rx);
@@ -318,16 +314,16 @@ void link_close(struct link_handle *link)
             if (link->phy_tx_on){
                 status = phy_stop_transmitter(link->phy);
                 if (status != 0){
-                    fprintf(stderr, "[LINK] Error stopping phy transmitter\n");
+                    ERROR("Error stopping phy transmitter\n");
                 }
             }
             if (link->phy_rx_on){
                 status = phy_stop_receiver(link->phy);
                 if (status != 0){
                     if (status == 1){
-                        fprintf(stderr, "[LINK] Warning: RX overruns were detected\n");
+                        ERROR("Warning: RX overruns were detected\n");
                     }else{
-                        fprintf(stderr, "[LINK] Error stopping phy receiver\n");
+                        ERROR("Error stopping phy receiver\n");
                     }
                 }
             }
@@ -365,10 +361,10 @@ static void convert_data_frame_struct_to_buf(struct data_frame *frame, uint8_t *
     i += sizeof(frame->crc32);
 
     if (i != DATA_FRAME_LENGTH){
-        fprintf(stderr, "[LINK] %s: ERROR: Link layer is using a different data frame "
-                        "length (%d) than the phy layer (%d). Update the DATA_FRAME_LENGTH"
-                        " macro in phy.h and recompile or there will be unexpected results\n",
-                        __FUNCTION__, i, DATA_FRAME_LENGTH);
+        ERROR("%s: ERROR: Link layer is using a different data frame "
+              "length (%d) than the phy layer (%d). Update the DATA_FRAME_LENGTH"
+              " macro in phy.h and recompile or there will be unexpected results\n",
+              __FUNCTION__, i, DATA_FRAME_LENGTH);
     }
 }
 
@@ -392,10 +388,10 @@ static void convert_ack_frame_struct_to_buf(struct ack_frame *frame, uint8_t *bu
     i += sizeof(frame->crc32);
 
     if (i != ACK_FRAME_LENGTH){
-        fprintf(stderr, "[LINK] %s: ERROR: Link layer is using a different ack frame "
-                        "length (%d) than the phy layer (%d). Update the ACK_FRAME_LENGTH"
-                        " macro in phy.h and recompile or there will be unexpected results\n",
-                        __FUNCTION__, i, ACK_FRAME_LENGTH);
+        ERROR("%s: ERROR: Link layer is using a different ack frame "
+              "length (%d) than the phy layer (%d). Update the ACK_FRAME_LENGTH"
+              " macro in phy.h and recompile or there will be unexpected results\n",
+              __FUNCTION__, i, ACK_FRAME_LENGTH);
     }
 }
 
@@ -426,10 +422,10 @@ static void convert_buf_to_data_frame_struct(uint8_t *buf, struct data_frame *fr
     i += sizeof(frame->crc32);
 
     if (i != DATA_FRAME_LENGTH){
-        fprintf(stderr, "[LINK] %s: ERROR: Link layer is using a different data frame "
-                        "length (%d) than the phy layer (%d). Update the DATA_FRAME_LENGTH"
-                        " macro in phy.h and recompile or there will be unexpected results\n",
-                        __FUNCTION__, i, DATA_FRAME_LENGTH);
+        ERROR("%s: ERROR: Link layer is using a different data frame "
+              "length (%d) than the phy layer (%d). Update the DATA_FRAME_LENGTH"
+              " macro in phy.h and recompile or there will be unexpected results\n",
+              __FUNCTION__, i, DATA_FRAME_LENGTH);
     }
 }
 
@@ -454,10 +450,10 @@ static void convert_buf_to_ack_frame_struct(uint8_t *buf, struct ack_frame *fram
     i += sizeof(frame->crc32);
 
     if (i != ACK_FRAME_LENGTH){
-        fprintf(stderr, "[LINK] %s: ERROR: Link layer is using a different ack frame "
-                        "length (%d) than the phy layer (%d). Update the ACK_FRAME_LENGTH"
-                        " macro in phy.h and recompile or there will be unexpected results\n",
-                        __FUNCTION__, i, ACK_FRAME_LENGTH);
+        ERROR("%s: ERROR: Link layer is using a different ack frame "
+              "length (%d) than the phy layer (%d). Update the ACK_FRAME_LENGTH"
+              " macro in phy.h and recompile or there will be unexpected results\n",
+              __FUNCTION__, i, ACK_FRAME_LENGTH);
     }
 }
 
@@ -485,8 +481,7 @@ static int start_transmitter(struct link_handle *link)
     //Kick off transmitter thread
     status = pthread_create(&(link->tx->thread), NULL, transmit_data_frames, link);
     if (status != 0){
-        fprintf(stderr, "[LINK] Error creating tx thread: %s\n",
-                    strerror(status));
+        ERROR("Error creating tx thread: %s\n", strerror(status));
         return -1;
     }
     return 0;
@@ -503,31 +498,30 @@ static int stop_transmitter(struct link_handle *link)
 {
     int status;
 
-    DEBUG_MSG("[LINK] TX: Stopping transmitter...\n");
+    DEBUG_MSG("TX: Stopping transmitter...\n");
     //signal stop
     link->tx->stop = true;
     //Signal the buffer filled condition so the thread will stop waiting
     //for a filled buffer
     status = pthread_mutex_lock(&(link->tx->data_buf_status_lock));
     if (status != 0){
-        fprintf(stderr, "[LINK] Error locking pthread_mutex\n");
+        ERROR("Error locking pthread_mutex\n");
     }
     status = pthread_cond_signal(&(link->tx->data_buf_filled_cond));
     if (status != 0){
-        fprintf(stderr, "[LINK] Error signaling pthread_cond\n");
+        ERROR("Error signaling pthread_cond\n");
     }
     status = pthread_mutex_unlock(&(link->tx->data_buf_status_lock));
     if (status != 0){
-        fprintf(stderr, "[LINK] Error unlocking pthread_mutex\n");
+        ERROR("Error unlocking pthread_mutex\n");
     }
     //Wait for tx thread to finish
     status = pthread_join(link->tx->thread, NULL);
     if (status != 0){
-        fprintf(stderr, "[LINK] Error joining tx thread: %s\n",
-                    strerror(status));
+        ERROR("Error joining tx thread: %s\n", strerror(status));
         return -1;
     }
-    DEBUG_MSG("[LINK] TX: Transmitter stopped\n");
+    DEBUG_MSG("TX: Transmitter stopped\n");
     return 0;
 }
 
@@ -546,11 +540,11 @@ int link_send_data(struct link_handle *link, uint8_t *data, unsigned int data_le
         status = send_payload(link, &data[i*PAYLOAD_LENGTH], PAYLOAD_LENGTH);
         if (status != 0){
             if (status == -2){
-                DEBUG_MSG("[LINK] TX: Send data failed: "
-                            "No response for payload #%d\n", i+1);
+                DEBUG_MSG("TX: Send data failed: "
+                          "No response for payload #%d\n", i+1);
             }else{
-                fprintf(stderr, "[LINK] TX: Send data failed: "
-                            "Unexpected error sending payload #%d\n", i+1);
+                ERROR("TX: Send data failed: "
+                      "Unexpected error sending payload #%d\n", i+1);
             }
             return status;
         }
@@ -563,11 +557,11 @@ int link_send_data(struct link_handle *link, uint8_t *data, unsigned int data_le
                                 (uint16_t) last_payload_length);
         if (status != 0){
             if (status == -2){
-                DEBUG_MSG("[LINK] TX: Send data failed: "
-                            "No response for payload #%d\n", i+1);
+                DEBUG_MSG("TX: Send data failed: "
+                          "No response for payload #%d\n", i+1);
             }else{
-                fprintf(stderr, "[LINK] TX: Send data failed: "
-                            "Unexpected error sending payload #%d\n", i+1);
+                ERROR("TX: Send data failed: "
+                      "Unexpected error sending payload #%d\n", i+1);
             }
             return status;
         }
@@ -591,8 +585,7 @@ static int send_payload(struct link_handle *link, uint8_t *payload,
     int status;
 
     if (used_payload_length > PAYLOAD_LENGTH){
-        fprintf(stderr, "[LINK] %s: Invalid payload length of %hu\n", __FUNCTION__,
-                used_payload_length);
+        ERROR("%s: Invalid payload length of %hu\n", __FUNCTION__, used_payload_length);
         return -1;
     }
 
@@ -614,20 +607,17 @@ static int send_payload(struct link_handle *link, uint8_t *payload,
     //Signal the buffer filled condition
     status = pthread_mutex_lock(&(link->tx->data_buf_status_lock));
     if (status != 0){
-        fprintf(stderr, "[LINK] Error locking pthread_mutex: %s\n",
-                    strerror(status));
+        ERROR("Error locking pthread_mutex: %s\n", strerror(status));
         return -1;
     }
     status = pthread_cond_signal(&(link->tx->data_buf_filled_cond));
     if (status != 0){
-        fprintf(stderr, "[LINK] Error signaling pthread_cond: %s\n",
-                    strerror(status));
+        ERROR("Error signaling pthread_cond: %s\n", strerror(status));
         return -1;
     }
     status = pthread_mutex_unlock(&(link->tx->data_buf_status_lock));
     if (status != 0){
-        fprintf(stderr, "[LINK] Error unlocking pthread_mutex: %s\n",
-                    strerror(status));
+        ERROR("Error unlocking pthread_mutex: %s\n", strerror(status));
         return -1;
     }
     //Wait for the transmission to complete
@@ -665,13 +655,13 @@ void *transmit_data_frames(void *arg)
     srand((unsigned int)time(NULL));
     seq_num = rand() % 65536;
 
-    DEBUG_MSG("[LINK] TX: Initial seq num = %hu\n", seq_num);
+    DEBUG_MSG("TX: Initial seq num = %hu\n", seq_num);
     tries = 1;
 
     while (!link->tx->stop){
         if (tries > LINK_MAX_TRIES){
-            DEBUG_MSG("[LINK] TX: Exceeded max tries (%u) without an ACK."
-                            " Skipping frame\n", tries-1);
+            DEBUG_MSG("TX: Exceeded max tries (%u) without an ACK."
+                      " Skipping frame\n", tries-1);
             link->tx->success = false;
             link->tx->done = true;
             tries = 1;
@@ -681,19 +671,18 @@ void *transmit_data_frames(void *arg)
             //Lock mutex
             status = pthread_mutex_lock(&(link->tx->data_buf_status_lock));
             if (status != 0){
-                fprintf(stderr, "[LINK] Mutex lock failed: %s\n",
-                        strerror(status));
+                ERROR("Mutex lock failed: %s\n", strerror(status));
                 goto out;
             }
             //Wait for condition signal - meaning buffer is full
             failed = false;
             while (!link->tx->data_buf_filled && !link->tx->stop){
-                DEBUG_MSG("[LINK] TX: Waiting for buffer to be filled\n");
+                DEBUG_MSG("TX: Waiting for buffer to be filled\n");
                 status = pthread_cond_wait(&(link->tx->data_buf_filled_cond),
                                             &(link->tx->data_buf_status_lock));
                 if (status != 0){
-                    fprintf(stderr, "[LINK] transmit_frames(): "
-                            "Condition wait failed: %s\n", strerror(status));
+                    ERROR("transmit_frames(): "
+                          "Condition wait failed: %s\n", strerror(status));
                     failed = true;
                     break;
                 }
@@ -701,8 +690,7 @@ void *transmit_data_frames(void *arg)
             //Unlock mutex
             status = pthread_mutex_unlock(&(link->tx->data_buf_status_lock));
             if (status != 0){
-                fprintf(stderr, "[LINK] transmit_frames(): Mutex unlock failed: %s\n",
-                        strerror(status));
+                ERROR("transmit_frames(): Mutex unlock failed: %s\n", strerror(status));
                 failed = true;
             }
             //Stop thread if stop variable is true, or something with pthreads went wrong
@@ -710,7 +698,7 @@ void *transmit_data_frames(void *arg)
                 link->tx->data_buf_filled = false;
                 goto out;
             }
-            DEBUG_MSG("[LINK] TX: Frame buffer filled. Sending...\n");
+            DEBUG_MSG("TX: Frame buffer filled. Sending...\n");
             //Set frame type
             link->tx->data_frame_buf.type = DATA_FRAME_CODE;
             //Set sequence number
@@ -728,27 +716,26 @@ void *transmit_data_frames(void *arg)
         //Transmit the frame
         status = phy_fill_tx_buf(link->phy, data_send_buf, DATA_FRAME_LENGTH);
         if (status != 0){
-            fprintf(stderr, "[LINK] Couldn't fill phy tx buffer\n");
+            ERROR("Couldn't fill phy tx buffer\n");
             goto out;
         }
-        DEBUG_MSG("[LINK] TX: Frame sent to PHY. Waiting for ACK...\n");
+        DEBUG_MSG("TX: Frame sent to PHY. Waiting for ACK...\n");
         //Wait for an ack
         status = receive_ack(link, seq_num, ACK_TIMEOUT_MS);
         if (status == -2){
-            DEBUG_MSG("[LINK] TX: Didn't get an ACK (timed out). Resending\n");
+            DEBUG_MSG("TX: Didn't get an ACK (timed out). Resending\n");
             tries++;
             continue;
         }else if (status == -3){
-            DEBUG_MSG("[LINK] TX: Received wrong ACK number. Resending\n");
+            DEBUG_MSG("TX: Received wrong ACK number. Resending\n");
             tries++;
             continue;
         }else if (status < 0){
-            fprintf(stderr, "[LINK] TX: Error receiving ACK. "
-                            "Stopping transmitter\n");
+            ERROR("TX: Error receiving ACK. Stopping transmitter\n");
             goto out;
         }
         //Success!
-        DEBUG_MSG("[LINK] TX: Got an ACK\n");
+        DEBUG_MSG("TX: Got an ACK\n");
         link->tx->success = true;
         link->tx->done = true;
         tries = 1;
@@ -782,8 +769,7 @@ static int start_receiver(struct link_handle *link)
     //Kick off receiver thread
     status = pthread_create(&(link->rx->thread), NULL, receive_frames, link);
     if (status != 0){
-        fprintf(stderr, "[LINK] Error creating rx thread: %s\n",
-                    strerror(status));
+        ERROR("Error creating rx thread: %s\n", strerror(status));
         return -1;
     }
     return 0;
@@ -800,17 +786,16 @@ static int stop_receiver(struct link_handle *link)
 {
     int status;
 
-    DEBUG_MSG("[LINK] RX: Stopping receiver...\n");
+    DEBUG_MSG("RX: Stopping receiver...\n");
     //signal stop
     link->rx->stop = true;
     //Wait for rx thread to finish
     status = pthread_join(link->rx->thread, NULL);
     if (status != 0){
-        fprintf(stderr, "[LINK] Error joining rx thread: %s\n",
-                    strerror(status));
+        ERROR("Error joining rx thread: %s\n", strerror(status));
         return -1;
     }
-    DEBUG_MSG("[LINK] RX: Receiver stopped\n");
+    DEBUG_MSG("RX: Receiver stopped\n");
     return 0;
 }
 
@@ -825,7 +810,7 @@ int link_receive_data(struct link_handle *link, int size, int max_timeouts,
 
     //Check for invalid input
     if (size < 0 || max_timeouts < 0){
-        fprintf(stderr, "[LINK] RX: link_receive_data(): parameter is negative\n");
+        ERROR("RX: link_receive_data(): parameter is negative\n");
         return -1;
     }
 
@@ -855,7 +840,7 @@ int link_receive_data(struct link_handle *link, int size, int max_timeouts,
                 timeouts++;
                 continue;
             }else if (bytes_received < 0){
-                fprintf(stderr, "[LINK] RX: Error receiving payload\n");
+                ERROR("RX: Error receiving payload\n");
                 return -1;
             }
             //Copy bytes from temp buf to data_buf
@@ -879,7 +864,7 @@ int link_receive_data(struct link_handle *link, int size, int max_timeouts,
                 continue;
             }
             if (bytes_received < 0){
-                fprintf(stderr, "[LINK] RX: Error receiving payload\n");
+                ERROR("RX: Error receiving payload\n");
                 return -1;
             }
             i += bytes_received;
@@ -907,15 +892,14 @@ static int receive_payload(struct link_handle *link, uint8_t *payload, unsigned 
     //Create absolute time format timeout
     status = create_timeout_abs(timeout_ms, &timeout_abs);
     if (status != 0){
-        fprintf(stderr, "[LINK] RX: receive_payload(): Error creating timeout\n");
+        ERROR("RX: receive_payload(): Error creating timeout\n");
         return -1;
     }
 
     //Prepare to wait with pthread_cond_timedwait()
     status = pthread_mutex_lock(&(link->rx->data_buf_status_lock));
     if (status != 0){
-        fprintf(stderr, "[LINK] RX: receive_payload(): Error locking mutex: %s\n",
-                    strerror(status));
+        ERROR("RX: receive_payload(): Error locking mutex: %s\n", strerror(status));
         return -1;
     }
     //Wait for condition signal - meaning rx data buffer is full
@@ -926,8 +910,8 @@ static int receive_payload(struct link_handle *link, uint8_t *payload, unsigned 
             if (status == ETIMEDOUT){
                 payload_length = -2;
             }else{
-                fprintf(stderr, "[LINK] RX: receive_payload(): "
-                        "Condition wait failed: %s\n", strerror(status));
+                ERROR("RX: receive_payload(): "
+                      "Condition wait failed: %s\n", strerror(status));
                 payload_length = -1;
             }
             break;
@@ -936,8 +920,7 @@ static int receive_payload(struct link_handle *link, uint8_t *payload, unsigned 
     //Waiting is done. Unlock mutex.
     status = pthread_mutex_unlock(&(link->rx->data_buf_status_lock));
     if (status != 0){
-        fprintf(stderr, "[LINK] RX: receive_payload(): Mutex unlock failed: %s\n",
-                strerror(status));
+        ERROR("RX: receive_payload(): Mutex unlock failed: %s\n", strerror(status));
         payload_length = -1;
     }
     //Did we error or timeout? Return
@@ -974,15 +957,14 @@ static int receive_ack(struct link_handle *link, uint16_t ack_num, unsigned int 
     //Create absolute time format timeout
     status = create_timeout_abs(timeout_ms, &timeout_abs);
     if (status != 0){
-        fprintf(stderr, "[LINK] RX: receive_ack(): Error creating timeout\n");
+        ERROR("RX: receive_ack(): Error creating timeout\n");
         return -1;
     }
 
     //Prepare to wait with pthread_cond_timedwait()
     status = pthread_mutex_lock(&(link->rx->ack_buf_status_lock));
     if (status != 0){
-        fprintf(stderr, "[LINK] RX: receive_ack(): Error locking mutex: %s\n",
-                    strerror(status));
+        ERROR("RX: receive_ack(): Error locking mutex: %s\n", strerror(status));
         return -1;
     }
     //Wait for condition signal - meaning buffer is full
@@ -993,8 +975,7 @@ static int receive_ack(struct link_handle *link, uint16_t ack_num, unsigned int 
             if (status == ETIMEDOUT){
                 ret = -2;
             }else{
-                fprintf(stderr, "[LINK] RX: receive_ack(): Condition wait failed: %s\n",
-                    strerror(status));
+                ERROR("RX: receive_ack(): Condition wait failed: %s\n", strerror(status));
                 ret = -1;
             }
             break;
@@ -1003,14 +984,13 @@ static int receive_ack(struct link_handle *link, uint16_t ack_num, unsigned int 
     //Waiting is done. Unlock mutex.
     status = pthread_mutex_unlock(&(link->rx->ack_buf_status_lock));
     if (status != 0){
-        fprintf(stderr, "[LINK] RX: receive_ack(): Mutex unlock failed: %s\n",
-                strerror(status));
+        ERROR("RX: receive_ack(): Mutex unlock failed: %s\n", strerror(status));
         ret = -1;
     }
     //Check the sequence number if nothing failed
     if (ret == 0 && link->rx->ack_frame_buf.ack_num != ack_num){
-        fprintf(stderr, "[LINK] RX: receive_ack(): Incorrect ack number %hu "
-                    "(expected %hu)\n", link->rx->ack_frame_buf.ack_num, ack_num);
+        ERROR("RX: receive_ack(): Incorrect ack number %hu "
+              "(expected %hu)\n", link->rx->ack_frame_buf.ack_num, ack_num);
         ret = -3;
     }
     //mark the rx ack buffer empty
@@ -1053,7 +1033,7 @@ void *receive_frames(void *arg)
         switch(state){
             case WAIT:
                 //--Wait for PHY to receive a frame
-                //DEBUG_MSG("[LINK] RX: State = WAIT\n");
+                //DEBUG_MSG("RX: State = WAIT\n");
                 rx_buf = phy_request_rx_buf(link->phy, 500);
                 if (rx_buf == NULL){
                     //timed out (or error). Continue waiting.
@@ -1064,14 +1044,14 @@ void *receive_frames(void *arg)
                 break;
             case CHECK_CRC:
                 //--We received a frame from the PHY. Check the CRC
-                DEBUG_MSG("[LINK] RX: State = CHECK_CRC\n");
+                DEBUG_MSG("RX: State = CHECK_CRC\n");
                 //First check if it's an ack or data frame to determine length
                 if (rx_buf[0] == DATA_FRAME_CODE){
-                    DEBUG_MSG("[LINK] RX: Received a data frame\n");
+                    DEBUG_MSG("RX: Received a data frame\n");
                     is_data_frame = true;
                     frame_length = DATA_FRAME_LENGTH;
                 }else{
-                    DEBUG_MSG("[LINK] RX: Received a ack frame\n");
+                    DEBUG_MSG("RX: Received a ack frame\n");
                     is_data_frame = false;
                     frame_length = ACK_FRAME_LENGTH;
                 }
@@ -1083,29 +1063,29 @@ void *receive_frames(void *arg)
                 //Compare received CRC vs expected CRC
                 if (crc_32_rx != crc_32){
                     #ifdef LINK_IGNORE_CRC_ERRORS
-                        NOTE("[LINK] RX: Frame received with errors. Continuing anyway (DEBUG).\n");
+                        NOTE("RX: Frame received with errors. Continuing anyway (DEBUG).\n");
                         state = COPY;
                     #else
                         //Drop the frame since there was an error
                         //First release the buffer for the PHY
                         phy_release_rx_buf(link->phy);
-                        NOTE("[LINK] RX: Frame received with errors. Dropping.\n");
+                        NOTE("RX: Frame received with errors. Dropping.\n");
                         state = WAIT;
                     #endif
                 }else{
-                    DEBUG_MSG("[LINK] RX: Frame received with no errors\n");
+                    DEBUG_MSG("RX: Frame received with no errors\n");
                     state = COPY;
                 }
                 break;
             case COPY:
                 //--CRC passed. Now copy the frame to link layer buffer
                 //--if it is not a duplicate frame
-                DEBUG_MSG("[LINK] RX: State = COPY\n");
+                DEBUG_MSG("RX: State = COPY\n");
                 if (is_data_frame){
                     //Is the previous data frame still being worked with?
                     if (link->rx->data_buf_filled){
                         //Instead of causing a disruption, drop the current frame
-                        fprintf(stderr, "[LINK] RX: Data frame dropped!\n");
+                        ERROR("RX: Data frame dropped!\n");
                         phy_release_rx_buf(link->phy);
                         state = WAIT;
                         break;
@@ -1117,7 +1097,7 @@ void *receive_frames(void *arg)
                     phy_release_rx_buf(link->phy);
                     //Is this frame a duplicate of the last frame?
                     if (link->rx->data_frame_buf.seq_num == seq_num && !first_frame){
-                        DEBUG_MSG("[LINK] RX: Received a duplicate frame.\n");
+                        DEBUG_MSG("RX: Received a duplicate frame.\n");
                         duplicate = true;
                     }else{
                         duplicate = false;
@@ -1130,20 +1110,17 @@ void *receive_frames(void *arg)
                         link->rx->data_buf_filled = true;
                         status = pthread_mutex_lock(&(link->rx->data_buf_status_lock));
                         if (status != 0){
-                            fprintf(stderr, "[LINK] RX: receive_frames(): "
-                                            "Error locking pthread_mutex\n");
+                            ERROR("RX: receive_frames(): Error locking pthread_mutex\n");
                             return NULL;
                         }
                         status = pthread_cond_signal(&(link->rx->data_buf_filled_cond));
                         if (status != 0){
-                            fprintf(stderr, "[LINK] RX: receive_frames(): "
-                                            "Error signaling pthread_cond\n");
+                            ERROR("RX: receive_frames(): Error signaling pthread_cond\n");
                             return NULL;
                         }
                         status = pthread_mutex_unlock(&(link->rx->data_buf_status_lock));
                         if (status != 0){
-                            fprintf(stderr, "[LINK] RX: receive_frames(): "
-                                            "Error unlocking pthread_mutex\n");
+                            ERROR("RX: receive_frames(): Error unlocking pthread_mutex\n");
                             return NULL;
                         }
                     }
@@ -1153,7 +1130,7 @@ void *receive_frames(void *arg)
                     //Is the previous ack frame still being worked with?
                     if (link->rx->ack_buf_filled){
                         //Instead of causing a disruption, drop the current frame
-                        fprintf(stderr, "[LINK] RX: ACK frame dropped!\n");
+                        ERROR("RX: ACK frame dropped!\n");
                         phy_release_rx_buf(link->phy);
                         state = WAIT;
                         break;
@@ -1166,20 +1143,17 @@ void *receive_frames(void *arg)
                     link->rx->ack_buf_filled = true;
                     status = pthread_mutex_lock(&(link->rx->ack_buf_status_lock));
                     if (status != 0){
-                        fprintf(stderr, "[LINK] RX: receive_frames(): "
-                                        "Error locking pthread_mutex\n");
+                        ERROR("RX: receive_frames(): Error locking pthread_mutex\n");
                         return NULL;
                     }
                     status = pthread_cond_signal(&(link->rx->ack_buf_filled_cond));
                     if (status != 0){
-                        fprintf(stderr, "[LINK] RX: receive_frames(): "
-                                        "Error signaling pthread_cond\n");
+                        ERROR("RX: receive_frames(): Error signaling pthread_cond\n");
                         return NULL;
                     }
                     status = pthread_mutex_unlock(&(link->rx->ack_buf_status_lock));
                     if (status != 0){
-                        fprintf(stderr, "[LINK] RX: receive_frames(): "
-                                        "Error unlocking pthread_mutex\n");
+                        ERROR("RX: receive_frames(): Error unlocking pthread_mutex\n");
                         return NULL;
                     }
                     //Done with the frame. Go back to WAIT state
@@ -1188,7 +1162,7 @@ void *receive_frames(void *arg)
                 break;
             case SEND_ACK:
                 //--We received a data frame, now it's time to send the ack
-                DEBUG_MSG("[LINK] RX: State = SEND_ACK (ack# = %hu)\n", seq_num);
+                DEBUG_MSG("RX: State = SEND_ACK (ack# = %hu)\n", seq_num);
 
                 link->tx->ack_frame_buf.type = 0xFF;
                 link->tx->ack_frame_buf.ack_num = seq_num;
@@ -1204,14 +1178,14 @@ void *receive_frames(void *arg)
                 //Transmit with phy
                 status = phy_fill_tx_buf(link->phy, ack_send_buf, ACK_FRAME_LENGTH);
                 if (status != 0){
-                    fprintf(stderr, "[LINK] Couldn't fill phy tx buffer\n");
+                    ERROR("Couldn't fill phy tx buffer\n");
                     goto out;
                 }
                 //Done; go back to the WAIT state
                 state = WAIT;
                 break;
             default:
-                fprintf(stderr, "[LINK] receive_frames(): invalid state\n");
+                ERROR("receive_frames(): invalid state\n");
                 return NULL;
         }
     }

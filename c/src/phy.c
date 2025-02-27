@@ -42,7 +42,7 @@
 #include "radio_config.h"    //bladeRF configuration
 
 #ifdef DEBUG_MODE
-    #define DEBUG_MSG(...) fprintf(stderr, __VA_ARGS__)
+    #define DEBUG_MSG(...) fprintf(stderr, "[PHY] " __VA_ARGS__)
     #ifndef ENABLE_NOTES
         #define ENABLE_NOTES
     #endif
@@ -51,10 +51,12 @@
 #endif
 
 #ifdef ENABLE_NOTES
-    #define NOTE(...) fprintf(stderr, __VA_ARGS__)
+    #define NOTE(...) fprintf(stderr, "[PHY] " __VA_ARGS__)
 #else
     #define NOTE(...)
 #endif
+
+#define ERROR(...) fprintf(stderr, "[PHY] " __VA_ARGS__)
 
 //Internal structs
 struct rx {
@@ -123,29 +125,29 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params)
         return NULL;
     }
 
-    DEBUG_MSG("[PHY] Initializing...\n");
+    DEBUG_MSG("Initializing...\n");
 
     if (dev == NULL){
-        fprintf(stderr, "[PHY] %s: BladeRF device uninitialized", __FUNCTION__);
+        ERROR("%s: BladeRF device uninitialized", __FUNCTION__);
     }
     phy->dev = dev;
 
     //--------Initialize and configure bladeRF device-------------
     status = radio_init_and_configure(phy->dev, params);
     if (status != 0){
-        fprintf(stderr, "[PHY] %s: Couldn't configure bladeRF: %s\n", __FUNCTION__,
+        ERROR("%s: Couldn't configure bladeRF: %s\n", __FUNCTION__,
                         bladerf_strerror(status));
         goto error;
     }
-    DEBUG_MSG("[PHY] BladeRF initialized and configured successfully\n");
+    DEBUG_MSG("BladeRF initialized and configured successfully\n");
 
     //-------------------Open fsk handle------------------------
     phy->fsk = fsk_init();
     if(phy->fsk == NULL){
-        fprintf(stderr, "[PHY] %s: Couldn't open fsk handle\n", __FUNCTION__);
+        ERROR("%s: Couldn't open fsk handle\n", __FUNCTION__);
         goto error;
     }
-    DEBUG_MSG("[PHY] FSK Initialized\n");
+    DEBUG_MSG("FSK Initialized\n");
 
     //------------------Initialize TX struct--------------------
     phy->tx = calloc(1, sizeof(struct tx));
@@ -184,13 +186,13 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params)
     //Initialize pthread condition variable for buf_filled
     status = pthread_cond_init(&(phy->tx->buf_filled_cond), NULL);
     if (status != 0){
-        fprintf(stderr, "[PHY] %s: Error initializing pthread_cond\n", __FUNCTION__);
+        ERROR("%s: Error initializing pthread_cond\n", __FUNCTION__);
         goto error;
     }
     //Initialize pthread mutex variable for buf_filled
     status = pthread_mutex_init(&(phy->tx->buf_status_lock), NULL);
     if (status != 0){
-        fprintf(stderr, "[PHY] %s: Error initializing pthread_mutex\n", __FUNCTION__);
+        ERROR("%s: Error initializing pthread_mutex\n", __FUNCTION__);
         goto error;
     }
 
@@ -230,22 +232,21 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params)
     // Create RX Channel Filter
     phy->rx->ch_filt = fir_init(rx_ch_filter, rx_ch_filter_len);
     if (phy->rx->ch_filt == NULL) {
-        fprintf(stderr, "[PHY] %s: Failed to create channel filter.\n", __FUNCTION__);
+        ERROR("%s: Failed to create channel filter.\n", __FUNCTION__);
         goto error;
     }
 
     // Create power normalizer
     phy->rx->pnorm = pnorm_init(0.95f, 0.1f, 20.0f);
     if (phy->rx->pnorm == NULL){
-        fprintf(stderr, "[PHY] %s: Couldn't initialize power normalizer\n",
-                __FUNCTION__);
+        ERROR("%s: Couldn't initialize power normalizer\n", __FUNCTION__);
         goto error;
     }
 
     //Create RX correlator
     phy->rx->corr = corr_init(preamble, 8*PREAMBLE_LENGTH, SAMP_PER_SYMB);
     if (phy->rx->corr == NULL){
-        fprintf(stderr, "[PHY] %s: Couldn't initialize correlator\n", __FUNCTION__);
+        ERROR("%s: Couldn't initialize correlator\n", __FUNCTION__);
         goto error;
     }
 
@@ -255,13 +256,13 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params)
     //Initialize pthread condition variable for buf_filled
     status = pthread_cond_init(&(phy->rx->buf_filled_cond), NULL);
     if (status != 0){
-        fprintf(stderr, "[PHY] %s: Error initializing pthread_cond\n", __FUNCTION__);
+        ERROR("%s: Error initializing pthread_cond\n", __FUNCTION__);
         goto error;
     }
     //Initialize pthread mutex variable for buf_filled
     status = pthread_mutex_init(&(phy->rx->buf_status_lock), NULL);
     if (status != 0){
-        fprintf(stderr, "[PHY] %s: Error initializing pthread_mutex\n", __FUNCTION__);
+        ERROR("%s: Error initializing pthread_mutex\n", __FUNCTION__);
         goto error;
     }
 
@@ -269,21 +270,21 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params)
     prng_seed = PRNG_SEED;
     phy->scrambling_sequence = prng_fill(&prng_seed, MAX_LINK_FRAME_SIZE);
     if (phy->scrambling_sequence == NULL){
-        fprintf(stderr, "[PHY] %s: Couldn't load scrambling sequence\n", __FUNCTION__);
+        ERROR("%s: Couldn't load scrambling sequence\n", __FUNCTION__);
         goto error;
     }
 
     #ifdef BYPASS_RX_CHANNEL_FILTER
-        DEBUG_MSG("[PHY] Info: Bypassing rx channel filter\n");
+        DEBUG_MSG("Info: Bypassing rx channel filter\n");
     #endif
     #ifdef BYPASS_RX_PNORM
-        DEBUG_MSG("[PHY] Info: Bypassing rx power normalization\n");
+        DEBUG_MSG("Info: Bypassing rx power normalization\n");
     #endif
     #ifdef BYPASS_PHY_SCRAMBLING
-        DEBUG_MSG("[PHY] Info: Bypassing scrambling\n");
+        DEBUG_MSG("Info: Bypassing scrambling\n");
     #endif
 
-    DEBUG_MSG("[PHY] Initialization done\n");
+    DEBUG_MSG("Initialization done\n");
 
     return phy;
 
@@ -296,7 +297,7 @@ void phy_close(struct phy_handle *phy)
 {
     int status;
 
-    DEBUG_MSG("[PHY] Closing\n");
+    DEBUG_MSG("Closing\n");
     if (phy != NULL){
         //close fsk handle
         fsk_close(phy->fsk);
@@ -310,13 +311,11 @@ void phy_close(struct phy_handle *phy)
             free(phy->tx->samples);
             status = pthread_mutex_destroy(&(phy->tx->buf_status_lock));
             if (status != 0){
-                fprintf(stderr, "[PHY] %s: Error destroying pthread_mutex\n",
-                        __FUNCTION__);
+                ERROR("%s: Error destroying pthread_mutex\n", __FUNCTION__);
             }
             status = pthread_cond_destroy(&(phy->tx->buf_filled_cond));
             if (status != 0){
-                fprintf(stderr, "[PHY] %s: Error destroying pthread_cond\n",
-                        __FUNCTION__);
+                ERROR("%s: Error destroying pthread_cond\n", __FUNCTION__);
             }
         }
         free(phy->tx);
@@ -331,13 +330,11 @@ void phy_close(struct phy_handle *phy)
             free(phy->rx->pnorm_samples);
             status = pthread_mutex_destroy(&(phy->rx->buf_status_lock));
             if (status != 0){
-                fprintf(stderr, "[PHY] %s: Error destroying pthread_mutex\n",
-                        __FUNCTION__);
+                ERROR("%s: Error destroying pthread_mutex\n", __FUNCTION__);
             }
             status = pthread_cond_destroy(&(phy->rx->buf_filled_cond));
             if (status != 0){
-                fprintf(stderr, "[PHY] %s: Error destroying pthread_cond\n",
-                        __FUNCTION__);
+                ERROR("%s: Error destroying pthread_cond\n", __FUNCTION__);
             }
         }
         free(phy->rx);
@@ -362,8 +359,7 @@ int phy_start_transmitter(struct phy_handle *phy)
     //Kick off frame transmitter thread
     status = pthread_create(&(phy->tx->thread), NULL, phy_transmit_frames, phy);
     if (status != 0){
-        fprintf(stderr, "[PHY] %s: Error creating tx thread: %s\n", __FUNCTION__,
-                strerror(status));
+        ERROR("%s: Error creating tx thread: %s\n", __FUNCTION__, strerror(status));
         return -1;
     }
     return 0;
@@ -373,31 +369,30 @@ int phy_stop_transmitter(struct phy_handle *phy)
 {
     int status;
 
-    DEBUG_MSG("[PHY] TX: Stopping transmitter...\n");
+    DEBUG_MSG("TX: Stopping transmitter...\n");
     //signal stop
     phy->tx->stop = true;
     //Signal the buffer filled condition so that the thread will stop
     //waiting for a filled buffer
     status = pthread_mutex_lock(&(phy->tx->buf_status_lock));
     if (status != 0){
-        fprintf(stderr, "[PHY] %s: Error locking pthread_mutex\n", __FUNCTION__);
+        ERROR("%s: Error locking pthread_mutex\n", __FUNCTION__);
     }
     status = pthread_cond_signal(&(phy->tx->buf_filled_cond));
     if (status != 0){
-        fprintf(stderr, "[PHY] %s: Error signaling pthread_cond\n", __FUNCTION__);
+        ERROR("%s: Error signaling pthread_cond\n", __FUNCTION__);
     }
     status = pthread_mutex_unlock(&(phy->tx->buf_status_lock));
     if (status != 0){
-        fprintf(stderr, "[PHY] %s: Error unlocking pthread_mutex\n", __FUNCTION__);
+        ERROR("%s: Error unlocking pthread_mutex\n", __FUNCTION__);
     }
     //Wait for tx thread to finish
     status = pthread_join(phy->tx->thread, NULL);
     if (status != 0){
-        fprintf(stderr, "[PHY] %s: Error joining tx thread: %s\n", __FUNCTION__,
-                strerror(status));
+        ERROR("%s: Error joining tx thread: %s\n", __FUNCTION__, strerror(status));
         return -1;
     }
-    DEBUG_MSG("[PHY] TX: Transmitter stopped\n");
+    DEBUG_MSG("TX: Transmitter stopped\n");
     return 0;
 }
 
@@ -407,14 +402,13 @@ int phy_fill_tx_buf(struct phy_handle *phy, uint8_t *data_buf, unsigned int leng
 
     //Check for null
     if (data_buf == NULL){
-        fprintf(stderr, "[PHY] %s: The supplied data buf is null\n", __FUNCTION__);
+        ERROR("%s: The supplied data buf is null\n", __FUNCTION__);
         return -1;
     }
     //Check for length outside of bounds
     if (length > MAX_LINK_FRAME_SIZE){
-        fprintf(stderr, "[PHY] %s: Data length of %u is greater than the maximum "
-                        "allowed length (%u)\n", __FUNCTION__, length,
-                        MAX_LINK_FRAME_SIZE);
+        ERROR("%s: Data length of %u is greater than the maximum allowed length (%u)\n",
+              __FUNCTION__, length, MAX_LINK_FRAME_SIZE);
         return -1;
     }
     //Wait for the buffer to be empty (and therefore ready for the next frame)
@@ -432,17 +426,17 @@ int phy_fill_tx_buf(struct phy_handle *phy, uint8_t *data_buf, unsigned int leng
     //Signal the buffer filled condition
     status = pthread_mutex_lock(&(phy->tx->buf_status_lock));
     if (status != 0){
-        fprintf(stderr, "[PHY] %s: Error locking pthread_mutex\n", __FUNCTION__);
+        ERROR("%s: Error locking pthread_mutex\n", __FUNCTION__);
         return -1;
     }
     status = pthread_cond_signal(&(phy->tx->buf_filled_cond));
     if (status != 0){
-        fprintf(stderr, "[PHY] %s: Error signaling pthread_cond\n", __FUNCTION__);
+        ERROR("%s: Error signaling pthread_cond\n", __FUNCTION__);
         return -1;
     }
     status = pthread_mutex_unlock(&(phy->tx->buf_status_lock));
     if (status != 0){
-        fprintf(stderr, "[PHY] %s: Error unlocking pthread_mutex\n", __FUNCTION__);
+        ERROR("%s: Error unlocking pthread_mutex\n", __FUNCTION__);
         return -1;
     }
     return 0;
@@ -469,24 +463,29 @@ void *phy_transmit_frames(void *arg)
     out_samples_raw = malloc(phy->tx->max_num_samples * 2 * sizeof(int16_t));
     if (out_samples_raw == NULL){
         perror("[PHY] malloc");
-        return NULL;
+        goto out;
     }
 
     #ifdef LOG_TX_SAMPLES
         //Open TX samples file
+        FILE  *fid = NULL;
         char   filename[15+BLADERF_SERIAL_LENGTH];
-        char   serial  [BLADERF_SERIAL_LENGTH];
+        struct bladerf_serial sn;
         size_t nwritten;
-        bladerf_get_serial(phy->dev, serial);
-        snprintf(filename, sizeof(filename), "tx_samples_%s.bin", serial);
+        status = bladerf_get_serial_struct(phy->dev, &sn);
+        if (status != 0){
+            ERROR("Failed to get serial number: %s\n", bladerf_strerror(status));
+            goto out;
+        }
+        snprintf(filename, sizeof(filename), "tx_samples_%s.bin", sn.serial);
 
         remove(filename);  //first delete existing file
-        FILE *fid = fopen(filename, "ab");  //append
+        fid = fopen(filename, "wb");
         if (fid == NULL){
-            fprintf(stderr, "Failed to open TX debug file for appending: %s\n",
-                    strerror(errno));
-            return NULL;
+            ERROR("Failed to open TX debug file for appending: %s\n", strerror(errno));
+            goto out;
         }
+        NOTE("Writing TX samples to %s\n", filename);
     #endif
 
     //Set field(s) in bladerf metadata struct
@@ -500,17 +499,15 @@ void *phy_transmit_frames(void *arg)
         //Lock mutex
         status = pthread_mutex_lock(&(phy->tx->buf_status_lock));
         if (status != 0){
-            fprintf(stderr, "[PHY] %s: Mutex lock failed: %s\n", __FUNCTION__,
-                    strerror(status));
-            return NULL;
+            ERROR("%s: Mutex lock failed: %s\n", __FUNCTION__, strerror(status));
+            goto out;
         }
         //Wait for condition signal - meaning buffer is full
         while (!phy->tx->buf_filled && !phy->tx->stop){
-            DEBUG_MSG("[PHY] TX: Waiting for buffer to be filled\n");
+            DEBUG_MSG("TX: Waiting for buffer to be filled\n");
             status = pthread_cond_wait(&(phy->tx->buf_filled_cond), &(phy->tx->buf_status_lock));
             if (status != 0){
-                fprintf(stderr, "[PHY] %s: Condition wait failed: %s\n", __FUNCTION__,
-                        strerror(status));
+                ERROR("%s: Condition wait failed: %s\n", __FUNCTION__, strerror(status));
                 failed = true;
                 break;
             }
@@ -518,17 +515,16 @@ void *phy_transmit_frames(void *arg)
         //Unlock mutex
         status = pthread_mutex_unlock(&(phy->tx->buf_status_lock));
         if (status != 0){
-            fprintf(stderr, "[PHY] %s: Mutex unlock failed: %s\n", __FUNCTION__,
-                    strerror(status));
+            ERROR("%s: Mutex unlock failed: %s\n", __FUNCTION__, strerror(status));
             failed = true;
         }
         //Stop thread if stop variable is true, or something with pthreads went wrong
         if (phy->tx->stop || failed){
             phy->tx->buf_filled = false;
-            return NULL;
+            goto out;
         }
         //------------Transmit the frame-------------
-        DEBUG_MSG("[PHY] TX: Buffer filled. Transmitting.\n");
+        DEBUG_MSG("TX: Buffer filled. Transmitting.\n");
         //Calculate the number of samples to transmit.
         num_samples = 2*RAMP_LENGTH + (TRAINING_SEQ_LENGTH + PREAMBLE_LENGTH +
                     phy->tx->data_length) * 8 * SAMP_PER_SYMB;
@@ -568,8 +564,8 @@ void *phy_transmit_frames(void *arg)
             //--DEBUG Write samples out to binary file
             nwritten = fwrite(out_samples_raw, sizeof(int16_t), num_samples*2, fid);
             if ((int) nwritten != num_samples*2){
-                fprintf(stderr, "Failed to write all samples to TX debug file: %s\n",
-                        strerror(errno));
+                ERROR("Failed to write all samples to TX debug file: %s\n",
+                      strerror(errno));
             }
             fclose(fid);
         #endif
@@ -578,15 +574,18 @@ void *phy_transmit_frames(void *arg)
         status = bladerf_sync_tx(phy->dev, out_samples_raw, num_samples,
                                 &metadata, 5000);
         if (status != 0){
-            fprintf(stderr, "[PHY] %s: Couldn't transmit samples with bladeRF: %s\n",
-                    __FUNCTION__, bladerf_strerror(status));
-            return NULL;
+            ERROR("%s: Couldn't transmit samples with bladeRF: %s\n",
+                  __FUNCTION__, bladerf_strerror(status));
+            goto out;
         }
     }
 
+out:
     free(out_samples_raw);
     #ifdef LOG_TX_SAMPLES
-        fclose(fid);
+        if (fid != NULL){
+            fclose(fid);
+        }
     #endif
     return NULL;
 }
@@ -674,8 +673,7 @@ int phy_start_receiver(struct phy_handle *phy)
     //Kick off frame receiver thread
     status = pthread_create(&(phy->rx->thread), NULL, phy_receive_frames, phy);
     if (status != 0){
-        fprintf(stderr, "[PHY] %s: Error creating rx thread: %s\n", __FUNCTION__,
-                strerror(status));
+        ERROR("%s: Error creating rx thread: %s\n", __FUNCTION__, strerror(status));
         return -1;
     }
     return 0;
@@ -685,17 +683,16 @@ int phy_stop_receiver(struct phy_handle *phy)
 {
     int status;
 
-    DEBUG_MSG("[PHY] RX: Stopping receiver...\n");
+    DEBUG_MSG("RX: Stopping receiver...\n");
     //signal stop
     phy->rx->stop = true;
     //Wait for rx thread to finish
     status = pthread_join(phy->rx->thread, NULL);
     if (status != 0){
-        fprintf(stderr, "[PHY] %s: Error joining rx thread: %s\n", __FUNCTION__,
-                strerror(status));
+        ERROR("%s: Error joining rx thread: %s\n", __FUNCTION__, strerror(status));
         return -1;
     }
-    DEBUG_MSG("[PHY] RX: Receiver stopped\n");
+    DEBUG_MSG("RX: Receiver stopped\n");
     if (phy->rx->overrun){
         return 1;   //warning: RX overruns were detected
     }else{
@@ -712,15 +709,14 @@ uint8_t *phy_request_rx_buf(struct phy_handle *phy, unsigned int timeout_ms)
     //Create absolute time format timeout
     status = create_timeout_abs(timeout_ms, &timeout_abs);
     if (status != 0){
-        fprintf(stderr, "[PHY] %s: Error creating timeout\n", __FUNCTION__);
+        ERROR("%s: Error creating timeout\n", __FUNCTION__);
         return NULL;
     }
 
     //Lock mutex
     status = pthread_mutex_lock(&(phy->rx->buf_status_lock));
     if (status != 0){
-        fprintf(stderr, "[PHY] %s: Error locking mutex: %s\n", __FUNCTION__,
-                    strerror(status));
+        ERROR("%s: Error locking mutex: %s\n", __FUNCTION__, strerror(status));
         return NULL;
     }
     //Wait for condition signal - meaning buffer is full
@@ -729,10 +725,9 @@ uint8_t *phy_request_rx_buf(struct phy_handle *phy, unsigned int timeout_ms)
                                         &timeout_abs);
         if (status != 0){
             if (status == ETIMEDOUT){
-                //DEBUG_MSG("[PHY] phy_request_rx_buf(): Condition wait timed out\n");
+                //DEBUG_MSG("phy_request_rx_buf(): Condition wait timed out\n");
             }else{
-                fprintf(stderr, "[PHY] %s: Condition wait failed: %s\n", __FUNCTION__,
-                            strerror(status));
+                ERROR("%s: Condition wait failed: %s\n", __FUNCTION__, strerror(status));
             }
             failed = true;
             break;
@@ -741,8 +736,7 @@ uint8_t *phy_request_rx_buf(struct phy_handle *phy, unsigned int timeout_ms)
     //Unlock mutex
     status = pthread_mutex_unlock(&(phy->rx->buf_status_lock));
     if (status != 0){
-        fprintf(stderr, "[PHY] %s: Mutex unlock failed: %s\n", __FUNCTION__,
-                strerror(status));
+        ERROR("%s: Mutex unlock failed: %s\n", __FUNCTION__, strerror(status));
         failed = true;
     }
 
@@ -800,19 +794,24 @@ void *phy_receive_frames(void *arg)
 
     #ifdef LOG_RX_SAMPLES
         //Open RX samples file
+        FILE  *fid = NULL;
         char   filename[15+BLADERF_SERIAL_LENGTH];
-        char   serial  [BLADERF_SERIAL_LENGTH];
+        struct bladerf_serial sn;
         size_t nwritten;
-        bladerf_get_serial(phy->dev, serial);
-        snprintf(filename, sizeof(filename), "rx_samples_%s.bin", serial);
-
-        remove(filename);  //first delete existing file
-        FILE *fid = fopen(filename, "ab");  //append
-        if (fid == NULL){
-            fprintf(stderr, "Failed to open RX debug file for appending: %s\n",
-                    strerror(errno));
+        status = bladerf_get_serial_struct(phy->dev, &sn);
+        if (status != 0){
+            ERROR("Failed to get serial number: %s\n", bladerf_strerror(status));
             goto out;
         }
+        snprintf(filename, sizeof(filename), "rx_samples_%s.bin", sn.serial);
+
+        remove(filename);  //first delete existing file
+        fid = fopen(filename, "wb");
+        if (fid == NULL){
+            ERROR("Failed to open RX debug file for appending: %s\n", strerror(errno));
+            goto out;
+        }
+        NOTE("Writing RX samples to %s\n", filename);
     #endif
 
     //Allocate memory for buffer
@@ -834,27 +833,27 @@ void *phy_receive_frames(void *arg)
         switch(state){
             case RECEIVE:
                 //--Receive samples, filter, and power normalize
-                //DEBUG_MSG("[PHY] RX: State = RECEIVE\n");
+                //DEBUG_MSG("RX: State = RECEIVE\n");
                 samples_index = 0;
                 status = bladerf_sync_rx(phy->dev, phy->rx->in_samples, NUM_SAMPLES_RX,
                                             &metadata, 5000);
                 if (status != 0){
-                    fprintf(stderr, "[PHY] %s: Couldn't receive samples from bladeRF: %s\n",
-                            __FUNCTION__, bladerf_strerror(status));
+                    ERROR("%s: Couldn't receive samples from bladeRF: %s\n",
+                          __FUNCTION__, bladerf_strerror(status));
                     goto out;
                 }
                 #ifndef SYNC_NO_METADATA
                     //Check metadata
                     if (metadata.status & BLADERF_META_STATUS_OVERRUN){
-                        NOTE("[PHY] %s: Got an overrun. Expected count = %u;"
-                                    " actual count = %u. Skipping these samples.\n",
-                                    __FUNCTION__, NUM_SAMPLES_RX, metadata.actual_count);
+                        NOTE("%s: Got an overrun. Expected count = %u;"
+                             " actual count = %u. Skipping these samples.\n",
+                             __FUNCTION__, NUM_SAMPLES_RX, metadata.actual_count);
                         phy->rx->overrun = true;
                         break;
                     }
                     if (timestamp != UINT64_MAX && metadata.timestamp != timestamp+NUM_SAMPLES_RX){
-                        NOTE("[PHY] %s: Unexpected timestamp. Expected %lu, got %lu.\n",
-                                __FUNCTION__, timestamp+NUM_SAMPLES_RX, metadata.timestamp);
+                        NOTE("%s: Unexpected timestamp. Expected %lu, got %lu.\n",
+                             __FUNCTION__, timestamp+NUM_SAMPLES_RX, metadata.timestamp);
                     }
                     timestamp = metadata.timestamp;
                 #endif
@@ -863,8 +862,8 @@ void *phy_receive_frames(void *arg)
                     //--DEBUG Write samples out to binary file
                     nwritten = fwrite(phy->rx->in_samples, sizeof(int16_t), NUM_SAMPLES_RX*2, fid);
                     if ((int) nwritten != NUM_SAMPLES_RX*2){
-                        fprintf(stderr, "Failed to write all samples to RX debug file: %s\n",
-                                strerror(errno));
+                        ERROR("Failed to write all samples to RX debug file: %s\n",
+                              strerror(errno));
                     }
                 #endif
 
@@ -893,12 +892,12 @@ void *phy_receive_frames(void *arg)
             case PREAMBLE_CORRELATE:
                 //--Cross correlate received samples with preamble to find start
                 //--of the data frame
-                //DEBUG_MSG("[PHY] RX: State = PREAMBLE_CORRELATE\n");
+                //DEBUG_MSG("RX: State = PREAMBLE_CORRELATE\n");
                 samples_index = corr_process(phy->rx->corr,
                                             &(phy->rx->pnorm_samples[samples_index]),
                                             (size_t) (NUM_SAMPLES_RX-samples_index), samples_index);
                 if (samples_index != CORRELATOR_NO_RESULT){
-                    DEBUG_MSG("[PHY] RX: Preamble matched @ index %lu\n", samples_index);
+                    DEBUG_MSG("RX: Preamble matched @ index %lu\n", samples_index);
                     preamble_detected = true;
                     new_frame = true;
                     //First we only demod the first byte to determine frame type
@@ -912,7 +911,7 @@ void *phy_receive_frames(void *arg)
                 break;
             case DEMOD:
                 //--Demod samples
-                DEBUG_MSG("[PHY] RX: State = DEMOD\n");
+                DEBUG_MSG("RX: State = DEMOD\n");
                 num_bytes_rx = fsk_demod(phy->fsk, &(phy->rx->pnorm_samples[samples_index]),
                                         NUM_SAMPLES_RX-(int)samples_index, new_frame,
                                         num_bytes_to_demod, &rx_buffer[data_index]);
@@ -936,7 +935,7 @@ void *phy_receive_frames(void *arg)
                 break;
             case CHECK_FRAME_TYPE:
                 //--Check the frame type byte
-                DEBUG_MSG("[PHY] RX: State = CHECK_FRAME_TYPE\n");
+                DEBUG_MSG("RX: State = CHECK_FRAME_TYPE\n");
                 #ifndef BYPASS_PHY_SCRAMBLING
                     frame_type = rx_buffer[0] ^ phy->scrambling_sequence[0];
                 #else
@@ -944,14 +943,14 @@ void *phy_receive_frames(void *arg)
                 #endif
                 //Set frame length according to what type of frame it is
                 if (frame_type == ACK_FRAME_CODE){
-                    DEBUG_MSG("[PHY] RX: Getting an ACK frame...\n");
+                    DEBUG_MSG("RX: Getting an ACK frame...\n");
                     frame_length = ACK_FRAME_LENGTH;
                 }else if(frame_type == DATA_FRAME_CODE){
-                    DEBUG_MSG("[PHY] RX: Getting a data frame...\n");
+                    DEBUG_MSG("RX: Getting a data frame...\n");
                     frame_length = DATA_FRAME_LENGTH;
                 }else{
-                    NOTE("[PHY] %s: rx'ed unknown frame type 0x%.2X\n",
-                            __FUNCTION__, frame_type);
+                    NOTE("%s: rx'ed unknown frame type 0x%.2X\n",
+                         __FUNCTION__, frame_type);
                     data_index = 0;
                     preamble_detected = false;
                     state = RECEIVE;
@@ -963,7 +962,7 @@ void *phy_receive_frames(void *arg)
                 break;
             case DECODE:
                 //--Remove any phy encoding on the received frame
-                DEBUG_MSG("[PHY] RX: State = DECODE\n");
+                DEBUG_MSG("RX: State = DECODE\n");
                 #ifndef BYPASS_PHY_SCRAMBLING
                     //Unscramble the frame
                     unscramble_frame(rx_buffer, frame_length, phy->scrambling_sequence);
@@ -972,11 +971,11 @@ void *phy_receive_frames(void *arg)
                 break;
             case COPY:
                 //--Copy frame into buffer which can be accessed by the link layer
-                DEBUG_MSG("[PHY] RX: State = COPY\n");
+                DEBUG_MSG("RX: State = COPY\n");
                 //Is the link layer still working with the previous frame?
                 if (phy->rx->buf_filled){
                     //Instead of disrupting the link layer, drop this frame
-                    NOTE("[PHY] RX: Frame dropped!\n");
+                    NOTE("RX: Frame dropped!\n");
                 }else{
                     //Copy frame into rx_data_buf
                     memcpy(phy->rx->data_buf, rx_buffer,
@@ -985,23 +984,20 @@ void *phy_receive_frames(void *arg)
                     //Signal that the buffer is filled
                     status = pthread_mutex_lock(&(phy->rx->buf_status_lock));
                     if (status != 0){
-                        fprintf(stderr, "[PHY] %s: Error locking pthread_mutex\n",
-                                __FUNCTION__);
+                        ERROR("%s: Error locking pthread_mutex\n", __FUNCTION__);
                         goto out;
                     }
                     status = pthread_cond_signal(&(phy->rx->buf_filled_cond));
                     if (status != 0){
-                        fprintf(stderr, "[PHY] %s: Error signaling pthread_cond\n",
-                                __FUNCTION__);
+                        ERROR("%s: Error signaling pthread_cond\n", __FUNCTION__);
                         goto out;
                     }
                     status = pthread_mutex_unlock(&(phy->rx->buf_status_lock));
                     if (status != 0){
-                        fprintf(stderr, "[PHY] %s: Error unlocking pthread_mutex\n",
-                                __FUNCTION__);
+                        ERROR("%s: Error unlocking pthread_mutex\n", __FUNCTION__);
                         goto out;
                     }
-                    DEBUG_MSG("[PHY] RX: Frame ready\n");
+                    DEBUG_MSG("RX: Frame ready\n");
                 }
                 preamble_detected = false;
 
@@ -1012,14 +1008,16 @@ void *phy_receive_frames(void *arg)
                 }
                 break;
             default:
-                fprintf(stderr, "[PHY] %s: Invalid state\n", __FUNCTION__);
+                ERROR("%s: Invalid state\n", __FUNCTION__);
                 goto out;
         }
     }
     out:
         free(rx_buffer);
         #ifdef LOG_RX_SAMPLES
-            fclose(fid);
+            if (fid != NULL){
+                fclose(fid);
+            }
         #endif
         return NULL;
 }
