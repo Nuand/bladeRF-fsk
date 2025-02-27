@@ -563,7 +563,7 @@ void *phy_transmit_frames(void *arg)
         #ifdef LOG_TX_SAMPLES
             //--DEBUG Write samples out to binary file
             nwritten = fwrite(out_samples_raw, sizeof(int16_t), num_samples*2, fid);
-            if ((int) nwritten != num_samples*2){
+            if (nwritten != (size_t)(num_samples*2)){
                 ERROR("Failed to write all samples to TX debug file: %s\n",
                       strerror(errno));
             }
@@ -862,7 +862,7 @@ void *phy_receive_frames(void *arg)
                     //--DEBUG Write samples out to binary file
                     nwritten = fwrite(phy->rx->in_samples, sizeof(int16_t),
                                       num_samples_rx_act*2, fid);
-                    if ((int) nwritten != num_samples_rx_act*2){
+                    if (nwritten != (size_t)(num_samples_rx_act*2)){
                         ERROR("Failed to write all samples to RX debug file: %s\n",
                               strerror(errno));
                     }
