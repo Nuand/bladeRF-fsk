@@ -140,6 +140,8 @@ int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_
     if (strncmp((char *)rx_data, (char *)tx_data, sizeof(tx_data)) != 0){
         fprintf(stderr, "   ERROR: RX data did not match TX data");
         passed = 0;
+    }else{
+        printf("   RX data matched TX data\n");
     }
 
     // link1 -> link2
@@ -166,6 +168,8 @@ int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_
     if (memcmp(rx_data, tx_data2, sizeof(tx_data2)) != 0){
         fprintf(stderr, "   ERROR: RX data did not match TX data");
         passed = 0;
+    }else{
+        printf("   RX data matched TX data\n");
     }
 
     out:
@@ -311,6 +315,8 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
     if (memcmp(rx_data, tx_data, DATA_FRAME_LENGTH) != 0){
         fprintf(stderr, "   ERROR: RX data did not match TX data");
         passed = 0;
+    }else{
+        printf("   RX data matched TX data\n");
     }
 
     //phy1 -> phy2
@@ -336,6 +342,8 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
     if (memcmp(rx_data, tx_data2, DATA_FRAME_LENGTH) != 0){
         fprintf(stderr, "   ERROR: RX data did not match TX data");
         passed = 0;
+    }else{
+        printf("   RX data matched TX data\n");
     }
 
     out:
@@ -379,7 +387,7 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
  * Test phy receiver thread to see if it's using too much CPU. If ENABLE_NOTES is
  * defined, overrun messages will be seen if the PHY receiver is at ~100% CPU.
  */
-int phy_receive_test(void)
+int phy_receive_test(char *dev_id)
 {
     struct phy_handle *phy = NULL;
     uint8_t *rx_data;
@@ -390,7 +398,7 @@ int phy_receive_test(void)
 
     printf("------------BEGINNING PHY RECEIVER TEST------------\n");
     //Init phy
-    status = bladerf_open(&dev, NULL);
+    status = bladerf_open(&dev, dev_id);
     if (status != 0){
         fprintf(stderr, "Couldn't open bladeRF device: %s\n", bladerf_strerror(status));
         goto out;
@@ -545,6 +553,8 @@ int fsk_test1(void)
     if (strcmp((char *)rx_data, (char *)tx_data) != 0){
         fprintf(stderr, "   ERROR: RX data did not match TX data\n");
         passed = 0;
+    }else{
+        printf("   RX data matched TX data\n");
     }
 
     out:
@@ -587,29 +597,35 @@ int main(int argc, char *argv[])
     rx_gain = (bladerf_gain)atoi(argv[4]);
 
 
+    // FSK mod/demod
     status = fsk_test1();
     if (status != 0){
         passed = 0;
     }
 
-    status = phy_receive_test();
+    //PHY receive with device 1
+    status = phy_receive_test(dev_id1);
     if (status != 0){
         passed = 0;
     }
-    status = phy_receive_test();
+    //PHY receive with device 2
+    status = phy_receive_test(dev_id2);
     if (status != 0){
         passed = 0;
     }
 
+    //PHY transmission from device 1 -> device 2
     status = phy_test(dev_id1, dev_id2, 904000000, 924000000, tx_gain, rx_gain);
     if (status != 0){
         passed = 0;
     }
+    //PHY transmission from device 2 -> device 1
     status = phy_test(dev_id2, dev_id1, 904000000, 924000000, tx_gain, rx_gain);
     if (status != 0){
         passed = 0;
     }
 
+    //LINK transmission w/ ACKs from device 1 -> device 2
     status = link_test(dev_id1, dev_id2, 904000000, 924000000, tx_gain, rx_gain);
     if (status != 0){
         passed = 0;

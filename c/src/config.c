@@ -520,7 +520,7 @@ void config_deinit(struct config *config)
         bladerf_close(config->bladerf_dev);
         config->bladerf_dev = NULL;
     }
-if (config->rx_output != NULL) {
+    if (config->rx_output != NULL) {
         fclose(config->rx_output);
         config->rx_output = NULL;
     }
