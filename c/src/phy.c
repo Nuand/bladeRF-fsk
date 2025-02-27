@@ -73,6 +73,9 @@ struct rx {
     pthread_cond_t buf_filled_cond;     //condition variable for buf_filled
     pthread_mutex_t buf_status_lock;    //mutex variable for accessing buf_filled
     bool overrun;               //True if receiver experienced RX sample overruns
+    #ifdef LOG_RX_SAMPLES
+        FILE *samples_file;
+    #endif
 };
 struct tx {
     uint8_t *data_buf;          //input data to transmit (including training seq/preamble)
@@ -84,6 +87,9 @@ struct tx {
     pthread_mutex_t buf_status_lock;
     unsigned int max_num_samples;       //Maximum number of tx samples to transmit
     struct complex_sample *samples;     //output samples to transmit
+    #ifdef LOG_TX_SAMPLES
+        FILE *samples_file;
+    #endif
 };
 
 struct phy_handle {
@@ -116,6 +122,10 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params)
     struct phy_handle *phy;
     uint64_t prng_seed;
     uint8_t preamble[PREAMBLE_LENGTH] = PREAMBLE;
+    #if defined(LOG_RX_SAMPLES) || defined(LOG_TX_SAMPLES)
+        char filename[15+BLADERF_SERIAL_LENGTH];
+        struct bladerf_serial sn;
+    #endif
 
     //------------Allocate memory for phy handle struct--------------
     //Calloc so all pointers are initialized to NULL
@@ -196,6 +206,23 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params)
         goto error;
     }
 
+    #ifdef LOG_TX_SAMPLES
+        //Open TX samples file
+        status = bladerf_get_serial_struct(dev, &sn);
+        if (status != 0){
+            ERROR("Failed to get serial number: %s\n", bladerf_strerror(status));
+            goto error;
+        }
+        snprintf(filename, sizeof(filename), "tx_samples_%s.bin", sn.serial);
+
+        phy->tx->samples_file = fopen(filename, "wb");
+        if (phy->tx->samples_file == NULL){
+            ERROR("Failed to open TX samples file for writing: %s\n", strerror(errno));
+            goto error;
+        }
+        NOTE("Writing TX samples to %s\n", filename);
+    #endif
+
     //------------------Initialize RX struct------------------
     phy->rx = calloc(1, sizeof(struct rx));
     if (phy->rx == NULL){
@@ -266,6 +293,23 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params)
         goto error;
     }
 
+    #ifdef LOG_RX_SAMPLES
+        //Open RX samples file
+        status = bladerf_get_serial_struct(dev, &sn);
+        if (status != 0){
+            ERROR("Failed to get serial number: %s\n", bladerf_strerror(status));
+            goto error;
+        }
+        snprintf(filename, sizeof(filename), "rx_samples_%s.bin", sn.serial);
+
+        phy->rx->samples_file = fopen(filename, "wb");
+        if (phy->rx->samples_file == NULL){
+            ERROR("Failed to open RX samples file for writing: %s\n", strerror(errno));
+            goto error;
+        }
+        NOTE("Writing RX samples to %s\n", filename);
+    #endif
+
     //-----------------Load scrambling sequence--------------------
     prng_seed = PRNG_SEED;
     phy->scrambling_sequence = prng_fill(&prng_seed, MAX_LINK_FRAME_SIZE);
@@ -285,7 +329,6 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params)
     #endif
 
     DEBUG_MSG("Initialization done\n");
-
     return phy;
 
     error:
@@ -307,6 +350,11 @@ void phy_close(struct phy_handle *phy)
         free(phy->scrambling_sequence);
         //free TX struct and its buffers
         if (phy->tx != NULL){
+            #ifdef LOG_TX_SAMPLES
+                if (phy->tx->samples_file != NULL) {
+                    fclose(phy->tx->samples_file);
+                }
+            #endif
             free(phy->tx->data_buf);
             free(phy->tx->samples);
             status = pthread_mutex_destroy(&(phy->tx->buf_status_lock));
@@ -321,6 +369,11 @@ void phy_close(struct phy_handle *phy)
         free(phy->tx);
         //free RX struct and its buffers
         if (phy->rx != NULL){
+            #ifdef LOG_RX_SAMPLES
+                if (phy->rx->samples_file != NULL) {
+                    fclose(phy->rx->samples_file);
+                }
+            #endif
             free(phy->rx->data_buf);
             fir_deinit(phy->rx->ch_filt);
             corr_deinit(phy->rx->corr);
@@ -459,34 +512,15 @@ void *phy_transmit_frames(void *arg)
     bool failed = false;
     struct bladerf_metadata metadata;
     int16_t *out_samples_raw = NULL;
+    #ifdef LOG_TX_SAMPLES
+        size_t nwritten;
+    #endif
 
     out_samples_raw = malloc(phy->tx->max_num_samples * 2 * sizeof(int16_t));
     if (out_samples_raw == NULL){
         perror("[PHY] malloc");
         goto out;
     }
-
-    #ifdef LOG_TX_SAMPLES
-        //Open TX samples file
-        FILE  *fid = NULL;
-        char   filename[15+BLADERF_SERIAL_LENGTH];
-        struct bladerf_serial sn;
-        size_t nwritten;
-        status = bladerf_get_serial_struct(phy->dev, &sn);
-        if (status != 0){
-            ERROR("Failed to get serial number: %s\n", bladerf_strerror(status));
-            goto out;
-        }
-        snprintf(filename, sizeof(filename), "tx_samples_%s.bin", sn.serial);
-
-        remove(filename);  //first delete existing file
-        fid = fopen(filename, "wb");
-        if (fid == NULL){
-            ERROR("Failed to open TX debug file for appending: %s\n", strerror(errno));
-            goto out;
-        }
-        NOTE("Writing TX samples to %s\n", filename);
-    #endif
 
     //Set field(s) in bladerf metadata struct
     memset(&metadata, 0, sizeof(metadata));
@@ -561,13 +595,13 @@ void *phy_transmit_frames(void *arg)
         //Convert samples
         conv_struct_to_samples(phy->tx->samples, num_samples, out_samples_raw);
         #ifdef LOG_TX_SAMPLES
-            //--DEBUG Write samples out to binary file
-            nwritten = fwrite(out_samples_raw, sizeof(int16_t), num_samples*2, fid);
+            //Write samples out to binary file
+            nwritten = fwrite(out_samples_raw, sizeof(int16_t), num_samples*2, phy->tx->samples_file);
             if (nwritten != (size_t)(num_samples*2)){
                 ERROR("Failed to write all samples to TX debug file: %s\n",
                       strerror(errno));
+                goto out;
             }
-            fclose(fid);
         #endif
 
         //transmit all samples. TX_NOW
@@ -582,11 +616,6 @@ void *phy_transmit_frames(void *arg)
 
 out:
     free(out_samples_raw);
-    #ifdef LOG_TX_SAMPLES
-        if (fid != NULL){
-            fclose(fid);
-        }
-    #endif
     return NULL;
 }
 
@@ -771,12 +800,12 @@ void *phy_receive_frames(void *arg)
     unsigned int num_bytes_rx;
     unsigned int data_index;        //Current index of rx_buffer to receive new bytes on
                                     //doubles as the current received frame length
-    uint64_t samples_index=0;            //Current index of samples buffer to correlate/demod
+    uint64_t samples_index=0;       //Current index of samples buffer to correlate/demod
                                     //samples from
     bool preamble_detected;
     bool new_frame = false;
-    int frame_length = 0;            //link layer frame length
-    uint8_t *rx_buffer = NULL;    //local rx data buffer
+    int frame_length = 0;           //link layer frame length
+    uint8_t *rx_buffer = NULL;      //local rx data buffer
     uint8_t frame_type;
     struct bladerf_metadata metadata;            //bladerf metadata for sync_rx()
     unsigned int num_bytes_to_demod = 0;
@@ -784,36 +813,15 @@ void *phy_receive_frames(void *arg)
     #ifndef SYNC_NO_METADATA
         uint64_t timestamp = UINT64_MAX;
     #endif
+    #ifdef LOG_RX_SAMPLES
+        size_t nwritten;
+    #endif
 
-    enum states {RECEIVE, PREAMBLE_CORRELATE, DEMOD,
-                    CHECK_FRAME_TYPE, DECODE, COPY};
+    enum states {RECEIVE, PREAMBLE_CORRELATE, DEMOD, CHECK_FRAME_TYPE, DECODE, COPY};
     enum states state;                //current state variable
 
-    /* corr_process() takes a size_t count.
-     * Ensure a cast from uint64_t to size_t is valid. */
+    //corr_process() takes a size_t count. Ensure a cast from uint64_t to size_t is valid
     assert(NUM_SAMPLES_RX < SIZE_MAX);
-
-    #ifdef LOG_RX_SAMPLES
-        //Open RX samples file
-        FILE  *fid = NULL;
-        char   filename[15+BLADERF_SERIAL_LENGTH];
-        struct bladerf_serial sn;
-        size_t nwritten;
-        status = bladerf_get_serial_struct(phy->dev, &sn);
-        if (status != 0){
-            ERROR("Failed to get serial number: %s\n", bladerf_strerror(status));
-            goto out;
-        }
-        snprintf(filename, sizeof(filename), "rx_samples_%s.bin", sn.serial);
-
-        remove(filename);  //first delete existing file
-        fid = fopen(filename, "wb");
-        if (fid == NULL){
-            ERROR("Failed to open RX debug file for appending: %s\n", strerror(errno));
-            goto out;
-        }
-        NOTE("Writing RX samples to %s\n", filename);
-    #endif
 
     //Allocate memory for buffer
     rx_buffer = malloc(MAX_LINK_FRAME_SIZE);
@@ -859,12 +867,13 @@ void *phy_receive_frames(void *arg)
                 #endif
 
                 #ifdef LOG_RX_SAMPLES
-                    //--DEBUG Write samples out to binary file
+                    //Write samples out to binary file
                     nwritten = fwrite(phy->rx->in_samples, sizeof(int16_t),
-                                      num_samples_rx_act*2, fid);
+                                      num_samples_rx_act*2, phy->rx->samples_file);
                     if (nwritten != (size_t)(num_samples_rx_act*2)){
                         ERROR("Failed to write all samples to RX debug file: %s\n",
                               strerror(errno));
+                        goto out;
                     }
                 #endif
 
@@ -1016,11 +1025,6 @@ void *phy_receive_frames(void *arg)
     }
     out:
         free(rx_buffer);
-        #ifdef LOG_RX_SAMPLES
-            if (fid != NULL){
-                fclose(fid);
-            }
-        #endif
         return NULL;
 }
 
