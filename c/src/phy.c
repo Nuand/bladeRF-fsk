@@ -780,6 +780,7 @@ void *phy_receive_frames(void *arg)
     uint8_t frame_type;
     struct bladerf_metadata metadata;            //bladerf metadata for sync_rx()
     unsigned int num_bytes_to_demod = 0;
+    unsigned int num_samples_rx_act = NUM_SAMPLES_RX;   //actual number of samples RX'd
     #ifndef SYNC_NO_METADATA
         uint64_t timestamp = UINT64_MAX;
     #endif
@@ -845,12 +846,11 @@ void *phy_receive_frames(void *arg)
                 #ifndef SYNC_NO_METADATA
                     //Check metadata
                     if (metadata.status & BLADERF_META_STATUS_OVERRUN){
-                        NOTE("%s: Got an overrun. Expected count = %u;"
-                             " actual count = %u. Skipping these samples.\n",
+                        NOTE("%s: Got an overrun. Expected count = %u; actual count = %u.\n",
                              __FUNCTION__, NUM_SAMPLES_RX, metadata.actual_count);
                         phy->rx->overrun = true;
-                        break;
                     }
+                    num_samples_rx_act = metadata.actual_count;
                     if (timestamp != UINT64_MAX && metadata.timestamp != timestamp+NUM_SAMPLES_RX){
                         NOTE("%s: Unexpected timestamp. Expected %lu, got %lu.\n",
                              __FUNCTION__, timestamp+NUM_SAMPLES_RX, metadata.timestamp);
@@ -860,8 +860,9 @@ void *phy_receive_frames(void *arg)
 
                 #ifdef LOG_RX_SAMPLES
                     //--DEBUG Write samples out to binary file
-                    nwritten = fwrite(phy->rx->in_samples, sizeof(int16_t), NUM_SAMPLES_RX*2, fid);
-                    if ((int) nwritten != NUM_SAMPLES_RX*2){
+                    nwritten = fwrite(phy->rx->in_samples, sizeof(int16_t),
+                                      num_samples_rx_act*2, fid);
+                    if ((int) nwritten != num_samples_rx_act*2){
                         ERROR("Failed to write all samples to RX debug file: %s\n",
                               strerror(errno));
                     }
@@ -870,18 +871,18 @@ void *phy_receive_frames(void *arg)
                 #ifndef BYPASS_RX_CHANNEL_FILTER
                     // Apply channel filter
                     fir_process(phy->rx->ch_filt, phy->rx->in_samples,
-                                phy->rx->filt_samples, NUM_SAMPLES_RX);
+                                phy->rx->filt_samples, num_samples_rx_act);
                 #else
-                    conv_samples_to_struct(phy->rx->in_samples, NUM_SAMPLES_RX,
-                                            phy->rx->filt_samples);
+                    conv_samples_to_struct(phy->rx->in_samples, num_samples_rx_act,
+                                           phy->rx->filt_samples);
                 #endif
                 //Power normalize
                 #ifndef BYPASS_RX_PNORM
-                    pnorm(phy->rx->pnorm, NUM_SAMPLES_RX, phy->rx->filt_samples,
-                            phy->rx->pnorm_samples, NULL, NULL);
+                    pnorm(phy->rx->pnorm, num_samples_rx_act, phy->rx->filt_samples,
+                          phy->rx->pnorm_samples, NULL, NULL);
                 #else
                     memcpy(phy->rx->pnorm_samples, phy->rx->filt_samples,
-                            NUM_SAMPLES_RX * sizeof(struct complex_sample));
+                           num_samples_rx_act * sizeof(struct complex_sample));
                 #endif
                 if (preamble_detected){
                     state = DEMOD;
@@ -895,7 +896,8 @@ void *phy_receive_frames(void *arg)
                 //DEBUG_MSG("RX: State = PREAMBLE_CORRELATE\n");
                 samples_index = corr_process(phy->rx->corr,
                                             &(phy->rx->pnorm_samples[samples_index]),
-                                            (size_t) (NUM_SAMPLES_RX-samples_index), samples_index);
+                                            (size_t) (num_samples_rx_act-samples_index),
+                                            samples_index);
                 if (samples_index != CORRELATOR_NO_RESULT){
                     DEBUG_MSG("RX: Preamble matched @ index %lu\n", samples_index);
                     preamble_detected = true;
@@ -913,8 +915,8 @@ void *phy_receive_frames(void *arg)
                 //--Demod samples
                 DEBUG_MSG("RX: State = DEMOD\n");
                 num_bytes_rx = fsk_demod(phy->fsk, &(phy->rx->pnorm_samples[samples_index]),
-                                        NUM_SAMPLES_RX-(int)samples_index, new_frame,
-                                        num_bytes_to_demod, &rx_buffer[data_index]);
+                                         num_samples_rx_act-(int)samples_index, new_frame,
+                                         num_bytes_to_demod, &rx_buffer[data_index]);
                 if (num_bytes_rx < num_bytes_to_demod){
                     //Receive more samples
                     num_bytes_to_demod -= num_bytes_rx;
@@ -929,9 +931,9 @@ void *phy_receive_frames(void *arg)
                         state = DECODE;
                     }
                 }
-                data_index += num_bytes_rx;
+                data_index    += num_bytes_rx;
                 samples_index += num_bytes_rx*8*SAMP_PER_SYMB;
-                new_frame = false;
+                new_frame      = false;
                 break;
             case CHECK_FRAME_TYPE:
                 //--Check the frame type byte
@@ -1001,7 +1003,7 @@ void *phy_receive_frames(void *arg)
                 }
                 preamble_detected = false;
 
-                if (samples_index == NUM_SAMPLES_RX){
+                if (samples_index == num_samples_rx_act){
                     state = RECEIVE;
                 }else{
                     state = PREAMBLE_CORRELATE;
