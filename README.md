@@ -176,7 +176,7 @@ the program. Try increasing the TX gain and run it again.
 | Main lobe bandwidth              | 375 kHz                          |
 | RX FIR filter passband bandwidth | 250 kHz                          |
 | RX FIR filter stopband bandwidth | 666 kHz                          |
-| Data frame length                | 8138 symbols (4.069 ms)          |
+| Data frame length                | 8138 symbols (32.55 ms)          |
 | Data frame payload length        | 1000 bytes                       |
 | Byte ordering                    | Little endian (LSB first)        |
 | Bit ordering                     | LSb first                        |
