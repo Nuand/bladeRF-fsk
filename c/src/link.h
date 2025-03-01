@@ -40,8 +40,6 @@
 
 #include "common.h"
 
-#define PAYLOAD_LENGTH 160
-#define DATA_FRAME_LENGTH (PAYLOAD_LENGTH+9)
 #define ACK_FRAME_LENGTH 7
 #define ACK_TIMEOUT_MS 500      //Timeout to wait for an acknowledgement
 #define LINK_MAX_TRIES 3        //Maximum number of frame retransmissions before the
@@ -79,17 +77,19 @@ int link_send_data(struct link_handle *link, uint8_t *data, unsigned int data_le
  *              will be less than 'size'
  */
 int link_receive_data(struct link_handle *link, int size, int max_timeouts,
-                        uint8_t *data_buf);
+                      uint8_t *data_buf);
 
 /**
  * Initializes/allocates a link handle data structure and starts all threads
  *
- * @param[in]   dev         pointer to opened bladeRF device handle
- * @param[in]   params      radio parameters to use when configuring bladeRF device
+ * @param[in]   dev              pointer to opened bladeRF device handle
+ * @param[in]   params           radio parameters to use when configuring bladeRF device
+ * @param[in]   payload_length   length of data payload per link frame
  *
  * @return      pointer to allocated link_handle struct on success, NULL on error
  */
-struct link_handle *link_init(struct bladerf *dev, struct radio_params *params);
+struct link_handle *link_init(struct bladerf *dev, struct radio_params *params,
+                              unsigned int payload_length);
 
 /**
  * Deinitializes/closes/frees a link_handle struct. Does nothing if link is NULL

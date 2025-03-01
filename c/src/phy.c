@@ -98,6 +98,7 @@ struct phy_handle {
     struct tx *tx;                  //tx data structure
     struct rx *rx;                  //rx data structure
     uint8_t *scrambling_sequence;
+    unsigned int max_frame_size;    //maximum data frame size (not including preamble)
 };
 
 //Internal functions
@@ -116,7 +117,8 @@ static void create_ramps(unsigned int ramp_length, struct complex_sample ramp_do
  *                                      *
  ****************************************/
 
-struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params)
+struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params,
+                            unsigned int max_frame_size)
 {
     int status;
     struct phy_handle *phy;
@@ -167,7 +169,7 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params)
     }
     //Allocate memory for tx data buffer
     phy->tx->data_buf = malloc(TRAINING_SEQ_LENGTH + PREAMBLE_LENGTH +
-                                MAX_LINK_FRAME_SIZE);
+                               max_frame_size);
     if (phy->tx->data_buf == NULL){
         perror("[PHY] malloc");
         goto error;
@@ -175,7 +177,7 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params)
     //Allocate memory for tx samples buffer
     //2*RAMP_LENGTH for the ramp up/ramp down
     phy->tx->max_num_samples = 2*RAMP_LENGTH + (TRAINING_SEQ_LENGTH + PREAMBLE_LENGTH +
-                    MAX_LINK_FRAME_SIZE) * 8 * SAMP_PER_SYMB;
+                               max_frame_size) * 8 * SAMP_PER_SYMB;
     #ifdef SYNC_NO_METADATA
         //Not using metadata mode; round up to multiple of SYNC_BUFFER_SIZE
         int rem = phy->tx->max_num_samples % SYNC_BUFFER_SIZE;
@@ -230,7 +232,7 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params)
         goto error;
     }
     //Allocate memory for rx data buffer
-    phy->rx->data_buf = malloc(MAX_LINK_FRAME_SIZE);
+    phy->rx->data_buf = malloc(max_frame_size);
     if (phy->rx->data_buf == NULL){
         perror("[PHY] malloc");
         goto error;
@@ -312,11 +314,13 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params)
 
     //-----------------Load scrambling sequence--------------------
     prng_seed = PRNG_SEED;
-    phy->scrambling_sequence = prng_fill(&prng_seed, MAX_LINK_FRAME_SIZE);
+    phy->scrambling_sequence = prng_fill(&prng_seed, max_frame_size);
     if (phy->scrambling_sequence == NULL){
         ERROR("%s: Couldn't load scrambling sequence\n", __FUNCTION__);
         goto error;
     }
+
+    phy->max_frame_size = max_frame_size;
 
     #ifdef BYPASS_RX_CHANNEL_FILTER
         DEBUG_MSG("Info: Bypassing rx channel filter\n");
@@ -459,9 +463,9 @@ int phy_fill_tx_buf(struct phy_handle *phy, uint8_t *data_buf, unsigned int leng
         return -1;
     }
     //Check for length outside of bounds
-    if (length > MAX_LINK_FRAME_SIZE){
+    if (length > phy->max_frame_size){
         ERROR("%s: Data length of %u is greater than the maximum allowed length (%u)\n",
-              __FUNCTION__, length, MAX_LINK_FRAME_SIZE);
+              __FUNCTION__, length, phy->max_frame_size);
         return -1;
     }
     //Wait for the buffer to be empty (and therefore ready for the next frame)
@@ -824,7 +828,7 @@ void *phy_receive_frames(void *arg)
     assert(NUM_SAMPLES_RX < SIZE_MAX);
 
     //Allocate memory for buffer
-    rx_buffer = malloc(MAX_LINK_FRAME_SIZE);
+    rx_buffer = malloc(phy->max_frame_size);
     if (rx_buffer == NULL){
         perror("[PHY] malloc");
         goto out;
@@ -958,7 +962,7 @@ void *phy_receive_frames(void *arg)
                     frame_length = ACK_FRAME_LENGTH;
                 }else if(frame_type == DATA_FRAME_CODE){
                     DEBUG_MSG("RX: Getting a data frame...\n");
-                    frame_length = DATA_FRAME_LENGTH;
+                    frame_length = phy->max_frame_size;
                 }else{
                     NOTE("%s: rx'ed unknown frame type 0x%.2X\n",
                          __FUNCTION__, frame_type);

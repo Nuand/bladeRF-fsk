@@ -53,11 +53,11 @@
 
 struct data_frame {
     //Total frame length = 1009 bytes (8072 bits)
-    uint8_t type;               //0x00 = data frame, 0xFF = ack frame
-    uint16_t seq_num;           //Sequence number
-    uint16_t payload_length;    //Length of used payload data in bytes
-    uint8_t payload[PAYLOAD_LENGTH];    //payload data
-    uint32_t crc32;             //32-bit CRC
+    uint8_t type;                   //0x00 = data frame, 0xFF = ack frame
+    uint16_t seq_num;               //Sequence number
+    uint16_t used_payload_length;   //Length of used payload data in bytes
+    uint8_t *payload;               //payload data - dynamically allocated
+    uint32_t crc32;                 //32-bit CRC
 };
 
 struct ack_frame {
@@ -86,7 +86,7 @@ struct rx {
     struct ack_frame ack_frame_buf;     //Output ack frame buffer
     //Leftover bytes received but not returned to the user after a call to
     //link_receive_data()
-    uint8_t extra_bytes[PAYLOAD_LENGTH];
+    uint8_t *extra_bytes;
     unsigned int num_extra_bytes;       //Number of bytes in 'extra_bytes' buffer
     pthread_t thread;                   //Receiver thread
     bool stop;                          //Signal to stop rx thread
@@ -105,6 +105,8 @@ struct link_handle {
     struct rx *rx;
     bool phy_tx_on;     //Is the phy transmitter on
     bool phy_rx_on;     //Is the phy receiver on
+    unsigned int payload_length;    //link frame payload length
+    unsigned int frame_length;      //full link frame length including header/footer
 };
 
 //internal functions
@@ -123,9 +125,9 @@ static int receive_ack(struct link_handle *link, uint16_t ack_num,
 static int receive_payload(struct link_handle *link, uint8_t *payload,
                             unsigned int timeout_ms);
 //utility:
-static void convert_data_frame_struct_to_buf(struct data_frame *frame, uint8_t *buf);
+static void convert_data_frame_struct_to_buf(struct data_frame *frame, uint8_t *buf, unsigned int payload_length);
 static void convert_ack_frame_struct_to_buf(struct ack_frame *frame, uint8_t *buf);
-static void convert_buf_to_data_frame_struct(uint8_t *buf, struct data_frame *frame);
+static void convert_buf_to_data_frame_struct(uint8_t *buf, struct data_frame *frame, unsigned int payload_length);
 static void convert_buf_to_ack_frame_struct(uint8_t *buf, struct ack_frame *frame);
 
 /****************************************
@@ -134,23 +136,31 @@ static void convert_buf_to_ack_frame_struct(uint8_t *buf, struct ack_frame *fram
  *                                      *
  ****************************************/
 
-struct link_handle *link_init(struct bladerf *dev, struct radio_params *params)
+struct link_handle *link_init(struct bladerf *dev, struct radio_params *params, unsigned int payload_length)
 {
-    int status;
+    int                 status;
     struct link_handle *link;
+    unsigned int        frame_length;   //Full link frame length including header/footer
 
     DEBUG_MSG("Initializing\n");
     //-------------Allocate memory for link handle struct--------------
-    //Calloc so all pointers are initialized to NULL, and all bools are
-    //initialized to false
+    //Calloc so all pointers are initialized to NULL, and all bools are initialized false
     link = calloc(1, sizeof(struct link_handle));
     if (link == NULL){
         perror("malloc");
         return NULL;
     }
 
+    link->payload_length = payload_length;
+    //Compute full link frame length
+    link->frame_length = sizeof(((struct data_frame *)0)->type) +
+                         sizeof(((struct data_frame *)0)->seq_num) +
+                         sizeof(((struct data_frame *)0)->used_payload_length) +
+                         payload_length +
+                         sizeof(((struct data_frame *)0)->crc32);
+
     //---------------Open/Initialize phy handle--------------------------
-    link->phy = phy_init(dev, params);
+    link->phy = phy_init(dev, params, link->frame_length);
     if (link->phy == NULL){
         ERROR("Couldn't initialize phy handle\n");
         goto error;
@@ -176,6 +186,13 @@ struct link_handle *link_init(struct bladerf *dev, struct radio_params *params)
         perror("malloc");
         goto error;
     }
+    //Allocate memory for tx data frame buffer payload
+    link->tx->data_frame_buf.payload = malloc(payload_length);
+    if (link->tx->data_frame_buf.payload == NULL){
+        perror("malloc");
+        goto error;
+    }
+
     //Initialize control/state variables
     link->tx->stop = false;
     link->tx->data_buf_filled = false;
@@ -197,6 +214,18 @@ struct link_handle *link_init(struct bladerf *dev, struct radio_params *params)
     //------------------Allocate memory for rx struct and initialize-----
     link->rx = malloc(sizeof(struct rx));
     if (link->rx == NULL){
+        perror("malloc");
+        goto error;
+    }
+    //Allocate memory for rx data frame buffer payload
+    link->rx->data_frame_buf.payload = malloc(payload_length);
+    if (link->rx->data_frame_buf.payload == NULL){
+        perror("malloc");
+        goto error;
+    }
+    // Allocate memory for extra_bytes buffer
+    link->rx->extra_bytes = malloc(payload_length);
+    if (link->rx->extra_bytes == NULL){
         perror("malloc");
         goto error;
     }
@@ -279,6 +308,9 @@ void link_close(struct link_handle *link)
             if (status != 0){
                 ERROR("Error destroying pthread_cond\n");
             }
+            if (link->tx->data_frame_buf.payload != NULL){
+                free(link->tx->data_frame_buf.payload);
+            }
         }
         free(link->tx);
         //Cleanup rx struct
@@ -305,6 +337,12 @@ void link_close(struct link_handle *link)
             status = pthread_cond_destroy(&(link->rx->ack_buf_filled_cond));
             if (status != 0){
                 ERROR("Error destroying pthread_cond\n");
+            }
+            if (link->rx->data_frame_buf.payload != NULL){
+                free(link->rx->data_frame_buf.payload);
+            }
+            if (link->rx->extra_bytes != NULL){
+                free(link->rx->extra_bytes);
             }
         }
         free(link->rx);
@@ -340,7 +378,7 @@ void link_close(struct link_handle *link)
  * @param[in]   frame   pointer to data_frame structure to convert
  * @param[out]  buf     pointer to buffer to place the frame in
  */
-static void convert_data_frame_struct_to_buf(struct data_frame *frame, uint8_t *buf)
+static void convert_data_frame_struct_to_buf(struct data_frame *frame, uint8_t *buf, unsigned int payload_length)
 {
     int i = 0;
 
@@ -351,21 +389,14 @@ static void convert_data_frame_struct_to_buf(struct data_frame *frame, uint8_t *
     memcpy(&buf[i], &(frame->seq_num), sizeof(frame->seq_num));
     i += sizeof(frame->seq_num);
     //payload length
-    memcpy(&buf[i], &(frame->payload_length), sizeof(frame->payload_length));
-    i += sizeof(frame->payload_length);
+    memcpy(&buf[i], &(frame->used_payload_length), sizeof(frame->used_payload_length));
+    i += sizeof(frame->used_payload_length);
     //payload
-    memcpy(&buf[i], frame->payload, PAYLOAD_LENGTH);
-    i += PAYLOAD_LENGTH;
+    memcpy(&buf[i], frame->payload, payload_length);
+    i += payload_length;
     //crc
     memcpy(&buf[i], &(frame->crc32), sizeof(frame->crc32));
     i += sizeof(frame->crc32);
-
-    if (i != DATA_FRAME_LENGTH){
-        ERROR("%s: ERROR: Link layer is using a different data frame "
-              "length (%d) than the phy layer (%d). Update the DATA_FRAME_LENGTH"
-              " macro in phy.h and recompile or there will be unexpected results\n",
-              __FUNCTION__, i, DATA_FRAME_LENGTH);
-    }
 }
 
 /**
@@ -398,10 +429,11 @@ static void convert_ack_frame_struct_to_buf(struct ack_frame *frame, uint8_t *bu
 /**
  * Convert uint8_t buffer to data frame struct
  *
- * @param[in]   buf     pointer to buffer holding a data frame
- * @param[out]  frame   pointer to data_frame struct to place frame in
+ * @param[in]   buf             pointer to buffer holding a data frame
+ * @param[out]  frame           pointer to data_frame struct to place frame in
+ * @param[in]   payload_length  length of payload in bytes
  */
-static void convert_buf_to_data_frame_struct(uint8_t *buf, struct data_frame *frame)
+static void convert_buf_to_data_frame_struct(uint8_t *buf, struct data_frame *frame, unsigned int payload_length)
 {
     int i = 0;
 
@@ -412,21 +444,14 @@ static void convert_buf_to_data_frame_struct(uint8_t *buf, struct data_frame *fr
     memcpy(&(frame->seq_num), &buf[i], sizeof(frame->seq_num));
     i += sizeof(frame->seq_num);
     //payload length
-    memcpy(&(frame->payload_length), &buf[i], sizeof(frame->payload_length));
-    i += sizeof(frame->payload_length);
+    memcpy(&(frame->used_payload_length), &buf[i], sizeof(frame->used_payload_length));
+    i += sizeof(frame->used_payload_length);
     //payload
-    memcpy(frame->payload, &buf[i], PAYLOAD_LENGTH);
-    i += PAYLOAD_LENGTH;
+    memcpy(frame->payload, &buf[i], payload_length);
+    i += payload_length;
     //crc
     memcpy(&(frame->crc32), &buf[i], sizeof(frame->crc32));
     i += sizeof(frame->crc32);
-
-    if (i != DATA_FRAME_LENGTH){
-        ERROR("%s: ERROR: Link layer is using a different data frame "
-              "length (%d) than the phy layer (%d). Update the DATA_FRAME_LENGTH"
-              " macro in phy.h and recompile or there will be unexpected results\n",
-              __FUNCTION__, i, DATA_FRAME_LENGTH);
-    }
 }
 
 /**
@@ -532,12 +557,12 @@ int link_send_data(struct link_handle *link, uint8_t *data, unsigned int data_le
     unsigned int last_payload_length;
     int status;
 
-    num_full_payloads = data_length/PAYLOAD_LENGTH;
+    num_full_payloads = data_length/link->payload_length;
 
     //Loop through each full payload
     for(i = 0; i < num_full_payloads; i++){
         //Send the frame
-        status = send_payload(link, &data[i*PAYLOAD_LENGTH], PAYLOAD_LENGTH);
+        status = send_payload(link, &data[i*link->payload_length], link->payload_length);
         if (status != 0){
             if (status == -2){
                 DEBUG_MSG("TX: Send data failed: "
@@ -551,9 +576,9 @@ int link_send_data(struct link_handle *link, uint8_t *data, unsigned int data_le
     }
 
     //Send the last payload for the remaining bytes
-    last_payload_length = data_length % PAYLOAD_LENGTH;
+    last_payload_length = data_length % link->payload_length;
     if (last_payload_length != 0){
-        status = send_payload(link, &data[i*PAYLOAD_LENGTH],
+        status = send_payload(link, &data[i*link->payload_length],
                                 (uint16_t) last_payload_length);
         if (status != 0){
             if (status == -2){
@@ -576,7 +601,7 @@ int link_send_data(struct link_handle *link, uint8_t *data, unsigned int data_le
  * @param[in]   link                    pointer to link handle
  * @param[in]   payload                 buffer of bytes to send
  * @param[in]   used_payload_length     number of bytes to send in 'payload'. If less
- *                                      than PAYLOAD_LENGTH, zeros will be padded.
+ *                                      than link->payload_length, zeros will be padded.
  * @return      0 on success, -1 on error, -2 on timeout/no response
  */
 static int send_payload(struct link_handle *link, uint8_t *payload,
@@ -584,8 +609,9 @@ static int send_payload(struct link_handle *link, uint8_t *payload,
 {
     int status;
 
-    if (used_payload_length > PAYLOAD_LENGTH){
-        ERROR("%s: Invalid payload length of %hu\n", __FUNCTION__, used_payload_length);
+    if (used_payload_length > link->payload_length){
+        ERROR("%s: Invalid payload length of %hu, must be <=%u\n", __FUNCTION__,
+              used_payload_length, link->payload_length);
         return -1;
     }
 
@@ -597,9 +623,9 @@ static int send_payload(struct link_handle *link, uint8_t *payload,
     memcpy(link->tx->data_frame_buf.payload, payload, used_payload_length);
     //Pad zeros to unused portion of the payload
     memset(&(link->tx->data_frame_buf.payload[used_payload_length]), 0,
-            PAYLOAD_LENGTH - used_payload_length);
+            link->payload_length - used_payload_length);
     //Set payload length
-    link->tx->data_frame_buf.payload_length = used_payload_length;
+    link->tx->data_frame_buf.used_payload_length = used_payload_length;
     //Mark tx not done
     link->tx->done = false;
     //Mark buffer filled
@@ -646,11 +672,17 @@ void *transmit_data_frames(void *arg)
     uint16_t seq_num;
     uint32_t crc_32;
     unsigned int tries;
-    uint8_t data_send_buf[DATA_FRAME_LENGTH];
+    uint8_t *data_send_buf;
     bool failed;
 
     //cast arg
     struct link_handle *link = (struct link_handle *) arg;
+    //allocate data send buf
+    data_send_buf = malloc(link->frame_length);
+    if (data_send_buf == NULL){
+        perror("malloc");
+        goto out;
+    }
     //Set initial sequence number to random value
     srand((unsigned int)time(NULL));
     seq_num = rand() % 65536;
@@ -704,17 +736,18 @@ void *transmit_data_frames(void *arg)
             //Set sequence number
             link->tx->data_frame_buf.seq_num = seq_num;
             //Copy frame into send buf
-            convert_data_frame_struct_to_buf(&(link->tx->data_frame_buf), data_send_buf);
+            convert_data_frame_struct_to_buf(&(link->tx->data_frame_buf), data_send_buf,
+                                             link->payload_length);
             //Calculate the CRC
-            crc_32 = crc32(data_send_buf, DATA_FRAME_LENGTH - sizeof(crc_32));
+            crc_32 = crc32(data_send_buf, link->frame_length - sizeof(crc_32));
             //Copy this CRC to the send buf
-            memcpy(&data_send_buf[DATA_FRAME_LENGTH - sizeof(crc_32)],
+            memcpy(&data_send_buf[link->frame_length - sizeof(crc_32)],
                     &crc_32, sizeof(crc_32));
             //Mark tx data buffer empty
             link->tx->data_buf_filled = false;
         }
         //Transmit the frame
-        status = phy_fill_tx_buf(link->phy, data_send_buf, DATA_FRAME_LENGTH);
+        status = phy_fill_tx_buf(link->phy, data_send_buf, link->frame_length);
         if (status != 0){
             ERROR("Couldn't fill phy tx buffer\n");
             goto out;
@@ -743,6 +776,9 @@ void *transmit_data_frames(void *arg)
     }
 
     out:
+        if (data_send_buf != NULL){
+            free(data_send_buf);
+        }
         link->tx->done = true;
         return NULL;
 }
@@ -800,18 +836,25 @@ static int stop_receiver(struct link_handle *link)
 }
 
 int link_receive_data(struct link_handle *link, int size, int max_timeouts,
-                        uint8_t *data_buf)
+                      uint8_t *data_buf)
 {
-    int bytes_received;
-    int bytes_remaining;
-    uint8_t temp_buf[PAYLOAD_LENGTH];
-    int i;
-    int timeouts;
+    int      bytes_received;
+    int      bytes_remaining;
+    uint8_t *temp_buf;
+    int      i;
+    int      timeouts;
 
     //Check for invalid input
     if (size < 0 || max_timeouts < 0){
         ERROR("RX: link_receive_data(): parameter is negative\n");
-        return -1;
+        goto error;
+    }
+
+    //allocate temporary buffer for last payload
+    temp_buf = malloc(link->payload_length);
+    if (temp_buf == NULL){
+        perror("malloc");
+        goto error;
     }
 
     timeouts = 0;
@@ -823,7 +866,7 @@ int link_receive_data(struct link_handle *link, int size, int max_timeouts,
         memmove(link->rx->extra_bytes, &(link->rx->extra_bytes[size]),
                 link->rx->num_extra_bytes - size);
         i = size;
-        return i;
+        goto out;
     }else{
         memcpy(data_buf, link->rx->extra_bytes, link->rx->num_extra_bytes);
         i = link->rx->num_extra_bytes;
@@ -833,7 +876,7 @@ int link_receive_data(struct link_handle *link, int size, int max_timeouts,
         bytes_remaining = size - i;
         //Make sure to not write more than 'size' bytes. For the last payload(s),
         //Use a temp buffer first
-        if (bytes_remaining < PAYLOAD_LENGTH){
+        if (bytes_remaining < link->payload_length){
             bytes_received = receive_payload(link, temp_buf, 500);
             //Check for timeout
             if (bytes_received == -2){
@@ -841,7 +884,7 @@ int link_receive_data(struct link_handle *link, int size, int max_timeouts,
                 continue;
             }else if (bytes_received < 0){
                 ERROR("RX: Error receiving payload\n");
-                return -1;
+                goto error;
             }
             //Copy bytes from temp buf to data_buf
             if (bytes_received < bytes_remaining){
@@ -865,13 +908,23 @@ int link_receive_data(struct link_handle *link, int size, int max_timeouts,
             }
             if (bytes_received < 0){
                 ERROR("RX: Error receiving payload\n");
-                return -1;
+                goto error;
             }
             i += bytes_received;
         }
     }
 
-    return i;
+    out:
+        if (temp_buf != NULL){
+            free(temp_buf);
+        }
+        return i;
+
+    error:
+        if (temp_buf != NULL){
+            free(temp_buf);
+        }
+        return -1;
 }
 
 /**
@@ -880,7 +933,7 @@ int link_receive_data(struct link_handle *link, int size, int max_timeouts,
  * @param[in]   timeout_ms      Amount of time to wait for a received payload
  * @param[out]  payload         pointer to buffer to place payload in
  *
- * @return      number of bytes received (0 - PAYLOAD_LENGTH), -1 on error,
+ * @return      number of bytes received (0 - link->payload_length), -1 on error,
  *              -2 on timeout
  */
 static int receive_payload(struct link_handle *link, uint8_t *payload, unsigned int timeout_ms)
@@ -929,7 +982,7 @@ static int receive_payload(struct link_handle *link, uint8_t *payload, unsigned 
     }
 
     //Get the length of the used portion of the payload
-    payload_length = link->rx->data_frame_buf.payload_length;
+    payload_length = link->rx->data_frame_buf.used_payload_length;
     //Copy the used portion of the payload
     memcpy(payload, link->rx->data_frame_buf.payload, payload_length);
     //Mark the rx data buffer empty
@@ -1049,7 +1102,7 @@ void *receive_frames(void *arg)
                 if (rx_buf[0] == DATA_FRAME_CODE){
                     DEBUG_MSG("RX: Received a data frame\n");
                     is_data_frame = true;
-                    frame_length = DATA_FRAME_LENGTH;
+                    frame_length = link->frame_length;
                 }else{
                     DEBUG_MSG("RX: Received a ack frame\n");
                     is_data_frame = false;
@@ -1091,8 +1144,8 @@ void *receive_frames(void *arg)
                         break;
                     }
                     //Copy/convert to data frame struct
-                    convert_buf_to_data_frame_struct(rx_buf,
-                                                &(link->rx->data_frame_buf));
+                    convert_buf_to_data_frame_struct(rx_buf, &(link->rx->data_frame_buf),
+                                                     link->payload_length);
                     //Release buffer from the phy
                     phy_release_rx_buf(link->phy);
                     //Is this frame a duplicate of the last frame?
@@ -1179,7 +1232,7 @@ void *receive_frames(void *arg)
                 status = phy_fill_tx_buf(link->phy, ack_send_buf, ACK_FRAME_LENGTH);
                 if (status != 0){
                     ERROR("Couldn't fill phy tx buffer\n");
-                    goto out;
+                    return NULL;
                 }
                 //Done; go back to the WAIT state
                 state = WAIT;
@@ -1189,6 +1242,5 @@ void *receive_frames(void *arg)
                 return NULL;
         }
     }
-    out:
-        return NULL;
+    return NULL;
 }

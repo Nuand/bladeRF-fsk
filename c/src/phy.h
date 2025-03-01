@@ -63,8 +63,6 @@
 //Byte codes for data/ack frame
 #define DATA_FRAME_CODE 0x00
 #define ACK_FRAME_CODE 0xFF
-//Maximum frame size in bytes
-#define MAX_LINK_FRAME_SIZE DATA_FRAME_LENGTH
 //Seed for pseudorandom number sequence generator
 #define PRNG_SEED 0x0109BBA53CFFD081
 //Length (in samples) of ramp up/ramp down
@@ -155,12 +153,14 @@ void phy_release_rx_buf(struct phy_handle *phy);
 /**
  * Open/Initialize a phy_handle
  * 
- * @param[in]   dev     pointer to opened bladeRF device handle
- * @param[in]   params  pointer to radio parameters struct
+ * @param[in]   dev              pointer to opened bladeRF device handle
+ * @param[in]   params           pointer to radio parameters 
+ * @param[in]   max_frame_size   maximum data frame size to transmit/receive
  *
  * @return      allocated phy_handle on success, NULL on failure
  */
-struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params);
+struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params,
+                            unsigned int max_frame_size);
 
 /**
  * Close a phy handle. Does nothing if handle is NULL
