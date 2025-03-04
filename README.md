@@ -162,47 +162,51 @@ the program. Try increasing the TX gain and run it again.
 ## Modem Details ##
 ### Waveform Specifications ###
 
-| Field                            | Value                            |
-| -------------------------------- |:---------------------------------|
-| BladeRF Sample rate              | 2 Msps                           |
-| BladeRF Bandwidth                | 1.5 MHz                          |
-| Raw link rate                    | 250 kbps                         | 
-| Symbol rate                      | 250 ksym/s                       |
-| Bits per symbol                  | 1                                |
-| Symbol mapping                   | Positive frequency deviation = 1<br>Negative frequency deviation = 0 |
-| Samples per symbol               | 8                                |
+| Field                               | Value                            |
+| ----------------------------------- |:---------------------------------|
+| BladeRF Sample rate                 | 2 Msps                           |
+| BladeRF Bandwidth                   | 1.5 MHz                          |
+| Raw link rate                       | 250 kbps                         | 
+| Symbol rate                         | 250 ksym/s                       |
+| Bits per symbol                     | 1                                |
+| Symbol mapping                      | Positive frequency deviation = 1<br>Negative frequency deviation = 0 |
+| Samples per symbol                  | 8                                |
 | Phase modulation index<br>(phase deviation per symbol) | π/2 radians  (1/4 revolution)  |
-| Frequency deviation              | +/- 62.5 kHz                     |
-| Main lobe bandwidth              | 375 kHz                          |
-| RX FIR filter passband bandwidth | 250 kHz                          |
-| RX FIR filter stopband bandwidth | 666 kHz                          |
-| Data frame length                | 8138 symbols (32.55 ms)          |
-| Data frame payload length        | 1000 bytes                       |
-| Byte ordering                    | Little endian (LSB first)        |
-| Bit ordering                     | LSb first                        |
+| Frequency deviation                 | +/- 62.5 kHz                     |
+| Main lobe bandwidth                 | 375 kHz                          |
+| RX FIR filter passband bandwidth    | 250 kHz                          |
+| RX FIR filter stopband bandwidth    | 666 kHz                          |
+| Data frame length (default)         | 8138 symbols (32.55 ms)          |
+| Data frame payload length (default) | 1000 bytes                       |
+| Byte ordering                       | Little endian (LSB first)        |
+| Bit ordering                        | LSb first                        |
 
 ### Framing Details ###
 Link layer frame is embedded within the physical layer frame.
 
+Note: Link layer data frame payload length is adjustable on the command line via 
+`-p`/`--packet-size`. Listed below are the frame sizes for the default payload length of
+1000 bytes.
+
 PHY frame contents:
-| Field               | Length           |
-| ------------------- |:-----------------|
-| Ramp up             | 8 samples        |
-| Training sequence   | 4 bytes          |
-| Preamble            | 4 bytes          |
-| Link layer frame    | 7 or 1009 bytes  |
-| Ramp down           | 8 samples        |
-| Total               | 15 or 1017 bytes |
+| Field             | Length                    |
+| ----------------- |:--------------------------|
+| Ramp up           | 8 samples                 |
+| Training sequence | 4 bytes                   |
+| Preamble          | 4 bytes                   |
+| Link layer frame  | 7 or 1009 bytes (default) |
+| Ramp down         | 8 samples                 |
+| Total             | 15 or 1017 bytes          |
 
 Link layer data frame contents:
-| Field                    | Length     |
-| ------------------------ |:-----------|
-| Frame type (data or ACK) | 1 byte     |
-| Sequence number          | 2 bytes    |
-| Used payload length      | 2 bytes    |
-| Payload                  | 1000 bytes |
-| CRC32 checksum           | 4 bytes    |
-| Total                    | 1009 bytes |
+| Field                    | Length               |
+| ------------------------ |:---------------------|
+| Frame type (data or ACK) | 1 byte               |
+| Sequence number          | 2 bytes              |
+| Used payload length      | 2 bytes              |
+| Payload                  | 1000 bytes (default) |
+| CRC32 checksum           | 4 bytes              |
+| Total                    | 1009 bytes           |
 
 Link layer acknowledgement (ACK) frame contents:
 | Field                    | Length     |
@@ -213,8 +217,8 @@ Link layer acknowledgement (ACK) frame contents:
 | Total                    | 7 bytes    |
 
 The modulation is performed at baseband by rotating the phase either counter-clockwise
-(positive phase change = positive frequency) or clockwise (negative phase change =
-negative frequency) around the IQ unit circle. Demodulation is performed by calculating
+(positive phase change = positive frequency = 1) or clockwise (negative phase change =
+negative frequency = 1) around the IQ unit circle. Demodulation is performed by calculating
 the phase for each sample based on its IQ angle, and measuring the change in phase over
 the length of the symbol (positive change = positive frequency = 1, negative change =
 negative frequency = 0).
