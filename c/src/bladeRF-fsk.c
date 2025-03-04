@@ -74,9 +74,8 @@ void *sender(void *arg)
     size_t   tx_data_size;
 
     //--allocate memory for data buffer
-    //For efficient file transmission, want a multiple of payload length, large enough
-    //(~2000 bytes) for efficient reads when sending a file in many chunks, also large
-    //enough to handle a large string input to the command line when using stdin.
+    //For efficient file transmission, do a multiple of payload length, large enough
+    //(~2000 bytes) for efficient reads when sending a file in many chunks
     tx_data_size = (size_t)ceil(2000.0/handle->payload_length) * handle->payload_length;
     tx_data      = malloc(tx_data_size);
     if (tx_data == NULL){
@@ -133,9 +132,19 @@ void *sender(void *arg)
 void *receiver(void *arg)
 {
     struct bladerf_fsk_handle *handle = (struct bladerf_fsk_handle *) arg;
-    uint8_t rx_data[2000];
-    int bytes_received;
-    size_t nwritten;
+    uint8_t *rx_data;
+    int      bytes_received;
+    size_t   nwritten;
+    size_t   rx_data_size;
+
+    //--allocate memory for data buffer
+    //Do a multiple of payload length, large enough (~2000 bytes) for efficient file writes
+    rx_data_size = (size_t)ceil(2000.0/handle->payload_length) * handle->payload_length;
+    rx_data      = malloc(rx_data_size);
+    if (rx_data == NULL){
+        perror("malloc");
+        return NULL;
+    }
 
     while(!handle->rx.stop){
         //Receive data into buffer
@@ -155,6 +164,10 @@ void *receiver(void *arg)
         if (handle->rx.out == stdout){
             fflush(stdout);
         }
+    }
+
+    if (rx_data != NULL){
+        free(rx_data);
     }
     return NULL;
 }
