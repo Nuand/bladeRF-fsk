@@ -128,7 +128,7 @@ t    = (0:length(tx_sig)-1)/Fs;
 nsym = numel(training_seq) + numel(preamble) + numel(tx_bits);
 
 %--TX plots
-%TX IQ samples
+%TX IQ samples vs time
 figure('position', [0 0 960 200]);
 plot(t, real(tx_sig)); hold on;
 plot(t, imag(tx_sig));
@@ -262,8 +262,10 @@ title('RX filtered & normalized IQ samples');
 
 %RX cross correlation with preamble. Plot power (i^2 + q^2).
 figure('position', [0 0 960 200]);
-plot(abs(rx_info.preamble_corr).^2);
+plot(abs(rx_info.preamble_corr).^2); hold on;
+plot([1, length(rx_info.preamble_corr)], repmat(rx_info.corr_thresh, 1, 2), '--r');
 title('RX cross correlation with preamble (power)');
+legend('correlation power', 'threshold');
 
 %RX dphase (data signal only, training/preamble not included)
 if rx_info.dphase ~= -1
