@@ -126,7 +126,7 @@ static struct option long_options[] = {
     { "help",        no_argument,        NULL,   OPTION_HELP        },
     { "device",      required_argument,  NULL,   OPTION_DEVICE      },
     { "quiet",       no_argument,        NULL,   OPTION_QUIET       },
-    { "payload_len", required_argument,  NULL,   OPTION_PAYLOAD_LEN },
+    { "packet-size", required_argument,  NULL,   OPTION_PAYLOAD_LEN },
 
     { "output",      required_argument,  NULL,   OPTION_OUTPUT      },
     { "rx-lna",      required_argument,  NULL,   OPTION_RXLNA       },
@@ -552,7 +552,7 @@ void config_print_options()
 
 "   -h, --help              Show this help text.\n"
 "   -d, --device <str>      Open the specified bladeRF device. Default: any available device.\n"
-"   -p, --packet_size <val> Payload data length per link layer frame [bytes]. Default: %u\n"
+"   -p, --packet-size <val> Payload data length per link layer frame [bytes]. Default: %u\n"
 "                             Both ends of the link must use the same size.\n"
 "   -q, --quiet             Suppress printing of banner/exit messages.\n"
 "\n"
