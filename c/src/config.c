@@ -36,11 +36,13 @@
 #   define DEBUG_MSG(...)
 #endif
 
-#define OPTIONS "hd:r:o:t:i:q"
+#define OPTIONS "hd:p:r:o:t:i:q"
 
-#define OPTION_HELP     'h'
-#define OPTION_DEVICE   'd'
-#define OPTION_QUIET    'q'
+#define OPTION_HELP        'h'
+#define OPTION_DEVICE      'd'
+#define OPTION_PAYLOAD_LEN 'p'
+#define OPTION_QUIET       'q'
+
 
 #define OPTION_RXFREQ   'r'
 #define OPTION_INPUT    'i'
@@ -116,30 +118,35 @@
 #define TX_GAIN_DEFAULT 50
 #define RX_GAIN_DEFAULT 30
 
+#define PAYLOAD_LEN_MIN     1
+#define PAYLOAD_LEN_MAX     1000000
+#define PAYLOAD_LEN_DEFAULT 1000
+
 static struct option long_options[] = {
-    { "help",     no_argument,        NULL,   OPTION_HELP     },
-    { "device",   required_argument,  NULL,   OPTION_DEVICE   },
-    { "quiet",    no_argument,        NULL,   OPTION_QUIET    },
+    { "help",        no_argument,        NULL,   OPTION_HELP        },
+    { "device",      required_argument,  NULL,   OPTION_DEVICE      },
+    { "quiet",       no_argument,        NULL,   OPTION_QUIET       },
+    { "payload_len", required_argument,  NULL,   OPTION_PAYLOAD_LEN },
 
-    { "output",   required_argument,  NULL,   OPTION_OUTPUT   },
-    { "rx-lna",   required_argument,  NULL,   OPTION_RXLNA    },
-    { "rx-vga1",  required_argument,  NULL,   OPTION_RXVGA1   },
-    { "rx-vga2",  required_argument,  NULL,   OPTION_RXVGA2   },
-    { "rx-freq",  required_argument,  NULL,   OPTION_RXFREQ   },
-    { "rx-gain",  required_argument,  NULL,   OPTION_RXGAIN   },
-    { "rx-biast", no_argument,        NULL,   OPTION_RXBIAST  },
-    { "rx-agc",   no_argument,        NULL,   OPTION_RXAGC    },
-    { "rx-chan",  required_argument,  NULL,   OPTION_RXCHAN   },
+    { "output",      required_argument,  NULL,   OPTION_OUTPUT      },
+    { "rx-lna",      required_argument,  NULL,   OPTION_RXLNA       },
+    { "rx-vga1",     required_argument,  NULL,   OPTION_RXVGA1      },
+    { "rx-vga2",     required_argument,  NULL,   OPTION_RXVGA2      },
+    { "rx-freq",     required_argument,  NULL,   OPTION_RXFREQ      },
+    { "rx-gain",     required_argument,  NULL,   OPTION_RXGAIN      },
+    { "rx-biast",    no_argument,        NULL,   OPTION_RXBIAST     },
+    { "rx-agc",      no_argument,        NULL,   OPTION_RXAGC       },
+    { "rx-chan",     required_argument,  NULL,   OPTION_RXCHAN      },
 
-    { "input",    required_argument,  NULL,   OPTION_INPUT    },
-    { "tx-vga1",  required_argument,  NULL,   OPTION_TXVGA1   },
-    { "tx-vga2",  required_argument,  NULL,   OPTION_TXVGA2   },
-    { "tx-freq",  required_argument,  NULL,   OPTION_TXFREQ   },
-    { "tx-gain",  required_argument,  NULL,   OPTION_TXGAIN   },
-    { "tx-biast", no_argument,        NULL,   OPTION_TXBIAST  },
-    { "tx-chan",  required_argument,  NULL,   OPTION_TXCHAN   },
+    { "input",       required_argument,  NULL,   OPTION_INPUT       },
+    { "tx-vga1",     required_argument,  NULL,   OPTION_TXVGA1      },
+    { "tx-vga2",     required_argument,  NULL,   OPTION_TXVGA2      },
+    { "tx-freq",     required_argument,  NULL,   OPTION_TXFREQ      },
+    { "tx-gain",     required_argument,  NULL,   OPTION_TXGAIN      },
+    { "tx-biast",    no_argument,        NULL,   OPTION_TXBIAST     },
+    { "tx-chan",     required_argument,  NULL,   OPTION_TXCHAN      },
 
-    { NULL,       0,                  NULL,   0               },
+    { NULL,          0,                  NULL,   0                  },
 };
 
 const struct numeric_suffix freq_suffixes[] = {
@@ -159,31 +166,32 @@ static const size_t num_freq_suffixes =
 #if defined(DEBUG_MODE) || defined(CONFIG_TEST)
     void print_config(const struct config *config)
     {
-        printf("  bladeRF handle:     %p\n", config->bladerf_dev);
+        printf("  bladeRF handle:     %p\n",  config->bladerf_dev);
+        printf("  payload length:     %u\n",  config->payload_length);
+        printf("  quiet:              %b\n",  config->quiet);
         printf("\n");
         printf("  RX Parameters:\n");
-        printf("    Output handle:    %p\n", config->rx_output);
+        printf("    Output handle:    %p\n",  config->rx_output);
         printf("    Frequency [Hz]:   %lu\n", config->params.rx_freq);
-        printf("    Channel:          %d\n", config->params.rx_chan);
-        printf("    Biastee:          %d\n", config->params.rx_biastee);
-        printf("    AGC enabled:      %d\n", config->params.rx_agc);
-        printf("    Use unified gain: %d\n", config->params.rx_use_unified);
-        printf("    Unified gain:     %d\n", config->params.rx_unified_gain);
-        printf("    LNA gain:         %d\n", config->params.rx_lna_gain);
-        printf("    VGA1 gain:        %d\n", config->params.rx_vga1_gain);
-        printf("    VGA2 gain:        %d\n", config->params.rx_vga2_gain);
-
+        printf("    Channel:          %d\n",  config->params.rx_chan);
+        printf("    Biastee:          %d\n",  config->params.rx_biastee);
+        printf("    AGC enabled:      %d\n",  config->params.rx_agc);
+        printf("    Use unified gain: %d\n",  config->params.rx_use_unified);
+        printf("    Unified gain:     %d\n",  config->params.rx_unified_gain);
+        printf("    LNA gain:         %d\n",  config->params.rx_lna_gain);
+        printf("    VGA1 gain:        %d\n",  config->params.rx_vga1_gain);
+        printf("    VGA2 gain:        %d\n",  config->params.rx_vga2_gain);
         printf("\n");
         printf("  TX Parameters:\n");
-        printf("    Input handle:     %p\n", config->tx_input);
+        printf("    Input handle:     %p\n",  config->tx_input);
+        printf("    File size:        %lu\n", config->tx_filesize);
         printf("    Frequency [Hz]:   %lu\n", config->params.tx_freq);
-        printf("    Channel:          %d\n", config->params.tx_chan);
-        printf("    Biastee:          %d\n", config->params.tx_biastee);
-        printf("    Use unified gain: %d\n", config->params.tx_use_unified);
-        printf("    Unified gain:     %d\n", config->params.tx_unified_gain);
-        printf("    VGA1 gain:        %d\n", config->params.tx_vga1_gain);
-        printf("    VGA2 gain:        %d\n", config->params.tx_vga2_gain);
-
+        printf("    Channel:          %d\n",  config->params.tx_chan);
+        printf("    Biastee:          %d\n",  config->params.tx_biastee);
+        printf("    Use unified gain: %d\n",  config->params.tx_use_unified);
+        printf("    Unified gain:     %d\n",  config->params.tx_unified_gain);
+        printf("    VGA1 gain:        %d\n",  config->params.tx_vga1_gain);
+        printf("    VGA2 gain:        %d\n",  config->params.tx_vga2_gain);
         printf("\n");
     }
 #endif
@@ -192,6 +200,7 @@ static struct config *alloc_config_with_defaults()
 {
     struct config *config;
 
+    //calloc so everything is initialized to 0/false/NULL
     config = calloc(1, sizeof(*config));
     if (!config) {
         perror("calloc");
@@ -210,7 +219,6 @@ static struct config *alloc_config_with_defaults()
     config->params.rx_unified_gain = RX_GAIN_DEFAULT;
     config->params.rx_biastee      = 0;
 
-
     /* TX defaults */
     config->tx_input               = NULL;
     config->params.tx_freq         = TX_FREQ_DEFAULT;
@@ -220,6 +228,8 @@ static struct config *alloc_config_with_defaults()
     config->params.tx_use_unified  = 1;
     config->params.tx_unified_gain = TX_GAIN_DEFAULT;
     config->params.tx_biastee      = 0;
+
+    config->payload_length         = PAYLOAD_LEN_DEFAULT;
 
     return config;
 }
@@ -250,8 +260,7 @@ static int init_remaining_params(struct config *config)
     return 0;
 }
 
-int config_init_from_cmdline(int argc, char * const argv[],
-                             struct config **config_out)
+int config_init_from_cmdline(int argc, char * const argv[], struct config **config_out)
 {
     int status = 0;
     struct config *config = NULL;
@@ -313,8 +322,7 @@ int config_init_from_cmdline(int argc, char * const argv[],
                 config->params.rx_use_unified = 0;
                 config->params.rx_vga1_gain   =
                     str2int(optarg,
-                            BLADERF_RXVGA1_GAIN_MIN,
-                            BLADERF_RXVGA1_GAIN_MAX,
+                            BLADERF_RXVGA1_GAIN_MIN, BLADERF_RXVGA1_GAIN_MAX,
                             &valid);
 
                 if (!valid) {
@@ -329,8 +337,7 @@ int config_init_from_cmdline(int argc, char * const argv[],
                 config->params.rx_use_unified = 0;
                 config->params.rx_vga2_gain   =
                     str2int(optarg,
-                            BLADERF_RXVGA2_GAIN_MIN,
-                            BLADERF_RXVGA2_GAIN_MAX,
+                            BLADERF_RXVGA2_GAIN_MIN, BLADERF_RXVGA2_GAIN_MAX,
                             &valid);
 
                 if (!valid) {
@@ -343,8 +350,7 @@ int config_init_from_cmdline(int argc, char * const argv[],
             case OPTION_RXFREQ:
                 config->params.rx_freq =
                     str2uint64_suffix(optarg,
-                                      FREQ_MIN,
-                                      FREQ_MAX,
+                                      FREQ_MIN, FREQ_MAX,
                                       freq_suffixes, num_freq_suffixes,
                                       &valid);
 
@@ -359,9 +365,8 @@ int config_init_from_cmdline(int argc, char * const argv[],
                 config->params.rx_agc          = 0;
                 config->params.rx_use_unified  = 1;
                 config->params.rx_unified_gain = str2int(optarg,
-                                    RX_GAIN_MIN,
-                                    RX_GAIN_MAX,
-                                    &valid);
+                                                         RX_GAIN_MIN, RX_GAIN_MAX,
+                                                         &valid);
 
                 if (!valid) {
                     status = -1;
@@ -403,7 +408,7 @@ int config_init_from_cmdline(int argc, char * const argv[],
                         //Get file size
                         status = stat(optarg, &file_info);
                         if (status != 0){
-                            fprintf(stderr, "Couldn't filesize of %s: %s\n",
+                            fprintf(stderr, "Couldn't get filesize of %s: %s\n",
                                     optarg, strerror(status));
                         }
                         config->tx_filesize = file_info.st_size;
@@ -415,8 +420,7 @@ int config_init_from_cmdline(int argc, char * const argv[],
                 config->params.tx_use_unified = 0;
                 config->params.tx_vga1_gain   =
                     str2int(optarg,
-                            BLADERF_TXVGA1_GAIN_MIN,
-                            BLADERF_TXVGA2_GAIN_MAX,
+                            BLADERF_TXVGA1_GAIN_MIN, BLADERF_TXVGA2_GAIN_MAX,
                             &valid);
 
                 if (!valid) {
@@ -430,8 +434,7 @@ int config_init_from_cmdline(int argc, char * const argv[],
                 config->params.tx_use_unified = 0;
                 config->params.tx_vga2_gain   =
                     str2int(optarg,
-                            BLADERF_TXVGA2_GAIN_MIN,
-                            BLADERF_TXVGA2_GAIN_MAX,
+                            BLADERF_TXVGA2_GAIN_MIN, BLADERF_TXVGA2_GAIN_MAX,
                             &valid);
 
                 if (!valid) {
@@ -444,9 +447,8 @@ int config_init_from_cmdline(int argc, char * const argv[],
             case OPTION_TXGAIN:
                 config->params.tx_use_unified  = 1;
                 config->params.tx_unified_gain = str2int(optarg,
-                                    TX_GAIN_MIN,
-                                    TX_GAIN_MAX,
-                                    &valid);
+                                                         TX_GAIN_MIN, TX_GAIN_MAX,
+                                                         &valid);
 
                 if (!valid) {
                     status = -1;
@@ -462,8 +464,7 @@ int config_init_from_cmdline(int argc, char * const argv[],
             case OPTION_TXFREQ:
                 config->params.tx_freq =
                     str2uint64_suffix(optarg,
-                                      FREQ_MIN,
-                                      FREQ_MAX,
+                                      FREQ_MIN, FREQ_MAX,
                                       freq_suffixes, num_freq_suffixes,
                                       &valid);
                 if (!valid) {
@@ -484,6 +485,18 @@ int config_init_from_cmdline(int argc, char * const argv[],
 
             case OPTION_QUIET:
                 config->quiet = true;
+                break;
+
+            case OPTION_PAYLOAD_LEN:
+                config->payload_length = str2uint(optarg,
+                                                  PAYLOAD_LEN_MIN, PAYLOAD_LEN_MAX,
+                                                  &valid);
+                if (!valid) {
+                    status = -1;
+                    fprintf(stderr, "Invalid payload length: %s. Range: %u to %u\n",
+                            optarg, PAYLOAD_LEN_MIN, PAYLOAD_LEN_MAX);
+                    goto out;
+                }
                 break;
         }
     }
@@ -539,6 +552,8 @@ void config_print_options()
 
 "   -h, --help              Show this help text.\n"
 "   -d, --device <str>      Open the specified bladeRF device. Default: any available device.\n"
+"   -p, --packet_size <val> Payload data length per link layer frame [bytes]. Default: %u\n"
+"                             Both ends of the link must use the same size.\n"
 "   -q, --quiet             Suppress printing of banner/exit messages.\n"
 "\n"
 "   -r, --rx-freq <freq>    RX frequency [Hz]. May use shorthand (ex: 904M). Default: %d\n"
@@ -574,8 +589,9 @@ void config_print_options()
 "   --tx-vga1 <value>       TX VGA1 gain [dB]. Range: %d to %d. Default: %d. [bladeRF 1 only]\n"
 "   --tx-vga2 <value>       TX VGA2 gain [dB]. Range: %d to %d. Default: %d.    [bladeRF 1 only]\n",
 
-    RX_FREQ_DEFAULT,
-    TX_FREQ_DEFAULT,
+    PAYLOAD_LEN_DEFAULT,
+
+    RX_FREQ_DEFAULT, TX_FREQ_DEFAULT,
 
     CHAN_MIN, CHAN_MAX, CHAN_DEFAULT,
     CHAN_MIN, CHAN_MAX, CHAN_DEFAULT,

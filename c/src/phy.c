@@ -565,7 +565,7 @@ void *phy_transmit_frames(void *arg)
         DEBUG_MSG("TX: Buffer filled. Transmitting.\n");
         //Calculate the number of samples to transmit.
         num_samples = 2*RAMP_LENGTH + (TRAINING_SEQ_LENGTH + PREAMBLE_LENGTH +
-                    phy->tx->data_length) * 8 * SAMP_PER_SYMB;
+                      phy->tx->data_length) * 8 * SAMP_PER_SYMB;
         #ifdef SYNC_NO_METADATA
             //Not using metadata mode; round up to multiple of SYNC_BUFFER_SIZE
             int rem = num_samples % SYNC_BUFFER_SIZE;
@@ -581,7 +581,7 @@ void *phy_transmit_frames(void *arg)
         #ifndef BYPASS_PHY_SCRAMBLING
             //Scramble the frame data (not including the training sequence or preamble)
             scramble_frame(&(phy->tx->data_buf[TRAINING_SEQ_LENGTH + PREAMBLE_LENGTH]),
-                            phy->tx->data_length, phy->scrambling_sequence);
+                           phy->tx->data_length, phy->scrambling_sequence);
         #endif
         //zero the tx samples buffer
         memset(phy->tx->samples, 0, sizeof(int16_t) * 2 * num_samples);
@@ -592,10 +592,17 @@ void *phy_transmit_frames(void *arg)
         //Mark the buffer empty
         phy->tx->buf_filled = false;
 
+        #ifdef TX_DC_TONE
+            for (int i = 0; i < num_samples; i++){
+                phy->tx->samples[i].i = 2047;
+                phy->tx->samples[i].q = 0;
+            }
+        #endif
+
         //Add the ramp up/ ramp down of samples
         ramp_down_index = RAMP_LENGTH+num_mod_samples;
         create_ramps(RAMP_LENGTH, phy->tx->samples[ramp_down_index-1], phy->tx->samples,
-                        &(phy->tx->samples[ramp_down_index]));
+                     &(phy->tx->samples[ramp_down_index]));
         //Convert samples
         conv_struct_to_samples(phy->tx->samples, num_samples, out_samples_raw);
         #ifdef LOG_TX_SAMPLES
@@ -754,8 +761,8 @@ uint8_t *phy_request_rx_buf(struct phy_handle *phy, unsigned int timeout_ms)
     }
     //Wait for condition signal - meaning buffer is full
     while (!phy->rx->buf_filled){
-        status = pthread_cond_timedwait(&(phy->rx->buf_filled_cond), &(phy->rx->buf_status_lock),
-                                        &timeout_abs);
+        status = pthread_cond_timedwait(&(phy->rx->buf_filled_cond),
+                                        &(phy->rx->buf_status_lock), &timeout_abs);
         if (status != 0){
             if (status == ETIMEDOUT){
                 //DEBUG_MSG("phy_request_rx_buf(): Condition wait timed out\n");
@@ -913,12 +920,12 @@ void *phy_receive_frames(void *arg)
                                             samples_index);
                 if (samples_index != CORRELATOR_NO_RESULT){
                     DEBUG_MSG("RX: Preamble matched @ index %lu\n", samples_index);
-                    preamble_detected = true;
-                    new_frame = true;
+                    preamble_detected  = true;
+                    new_frame          = true;
                     //First we only demod the first byte to determine frame type
                     num_bytes_to_demod = 1;
-                    data_index = 0;
-                    state = DEMOD;
+                    data_index         = 0;
+                    state              = DEMOD;
                 }else{
                     //No preamble match. Receive more samples
                     state = RECEIVE;
@@ -966,14 +973,14 @@ void *phy_receive_frames(void *arg)
                 }else{
                     NOTE("%s: rx'ed unknown frame type 0x%.2X\n",
                          __FUNCTION__, frame_type);
-                    data_index = 0;
+                    data_index        = 0;
                     preamble_detected = false;
-                    state = RECEIVE;
+                    state             = RECEIVE;
                     break;
                 }
                 //Demod the rest of the bytes
                 num_bytes_to_demod = frame_length-1;
-                state = DEMOD;
+                state              = DEMOD;
                 break;
             case DECODE:
                 //--Remove any phy encoding on the received frame
@@ -993,8 +1000,7 @@ void *phy_receive_frames(void *arg)
                     NOTE("RX: Frame dropped!\n");
                 }else{
                     //Copy frame into rx_data_buf
-                    memcpy(phy->rx->data_buf, rx_buffer,
-                            frame_length);
+                    memcpy(phy->rx->data_buf, rx_buffer, frame_length);
                     phy->rx->buf_filled = true;
                     //Signal that the buffer is filled
                     status = pthread_mutex_lock(&(phy->rx->buf_status_lock));

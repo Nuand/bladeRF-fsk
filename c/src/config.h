@@ -31,12 +31,13 @@
  * Application configuration parameters
  */
 struct config {
-    struct bladerf *bladerf_dev;    //bladeRF device handle
-    struct radio_params params;     //Radio parameters: gains and frequencies
-    FILE *rx_output;                //File to write received data to
-    FILE *tx_input;                 //File to read transmitted data from
-    long int tx_filesize;           //Size of the tx_input file, if it is not stdin
-    bool quiet;                     //Option to suppress printing of banner message
+    struct bladerf     *bladerf_dev;    //bladeRF device handle
+    struct radio_params params;         //Radio parameters: gains and frequencies
+    FILE               *rx_output;      //File to write received data to
+    FILE               *tx_input;       //File to read transmitted data from
+    long int            tx_filesize;    //Size of the tx_input file, if it is not stdin
+    unsigned int        payload_length; //length of data payload (bytes) per link layer frame
+    bool                quiet;          //Option to suppress printing of banner message
 };
 
 
@@ -45,7 +46,7 @@ struct config {
  *
  * @param[in]   argc    argc from main()
  * @param[in]   argv    argv from main()
- * @param[out]  c       Updated to point to configuration struture on success,
+ * @param[out]  c       Updated to point to configuration structure on success,
  *                      or NULL on non-zero return.
  *
  * @return 0 on success

@@ -38,6 +38,9 @@
     #define DEBUG_MSG(...)
 #endif
 
+#define PAYLOAD_LENGTH    1000                  //link layer payload length
+#define DATA_FRAME_LENGTH (PAYLOAD_LENGTH+9)    //link layer total frame length
+
 /**
  * Test link layer code with data transfer between two devices
  */
@@ -102,7 +105,7 @@ int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_
     params.rx_biastee      = 0;
     params.rx_agc          = 0;
 
-    link1 = link_init(dev1, &params);
+    link1 = link_init(dev1, &params, PAYLOAD_LENGTH);
     if (link1 == NULL){
         fprintf(stderr, "Couldn't initialize link1\n");
         status = -1;
@@ -111,7 +114,7 @@ int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_
     //Init link2
     params.tx_freq         = tx_freq2;
     params.rx_freq         = tx_freq1;
-    link2 = link_init(dev2, &params);
+    link2 = link_init(dev2, &params, PAYLOAD_LENGTH);
     if (link2 == NULL){
         fprintf(stderr, "Couldn't initialize link2\n");
         status = -1;
@@ -251,7 +254,7 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
     params.rx_biastee      = 0;
     params.rx_agc          = 0;
 
-    phy1 = phy_init(dev1, &params);
+    phy1 = phy_init(dev1, &params, DATA_FRAME_LENGTH);
     if (phy1 == NULL){
         fprintf(stderr, "Couldn't initialize phy1\n");
         status = -1;
@@ -266,7 +269,7 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
     }
     params.tx_freq         = tx_freq2;
     params.rx_freq         = tx_freq1;
-    phy2 = phy_init(dev2, &params);
+    phy2 = phy_init(dev2, &params, DATA_FRAME_LENGTH);
     if (phy2 == NULL){
         fprintf(stderr, "Couldn't initialize phy2\n");
         status = -1;
@@ -432,7 +435,7 @@ int phy_receive_test(char *dev_id)
     params.rx_biastee      = 0;
     params.rx_agc          = 0;
 
-    phy = phy_init(dev, &params);
+    phy = phy_init(dev, &params, DATA_FRAME_LENGTH);
     if (phy == NULL){
         fprintf(stderr, "Couldn't initialize phy\n");
         status = -1;

@@ -74,8 +74,10 @@
 
 //DEBUG: Define this to write all RX samples out to binary file
 // #define LOG_RX_SAMPLES
-//DEBUG Define this to write all TX samples out to binary file
+//DEBUG: Define this to write all TX samples out to binary file
 // #define LOG_TX_SAMPLES
+//DEBUG: Define this to replace TX frame transmissions with a DC tone
+// #define TX_DC_TONE
 
 struct phy_handle;
 

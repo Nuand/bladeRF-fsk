@@ -140,7 +140,6 @@ struct link_handle *link_init(struct bladerf *dev, struct radio_params *params, 
 {
     int                 status;
     struct link_handle *link;
-    unsigned int        frame_length;   //Full link frame length including header/footer
 
     DEBUG_MSG("Initializing\n");
     //-------------Allocate memory for link handle struct--------------
@@ -838,11 +837,12 @@ static int stop_receiver(struct link_handle *link)
 int link_receive_data(struct link_handle *link, int size, int max_timeouts,
                       uint8_t *data_buf)
 {
-    int      bytes_received;
-    int      bytes_remaining;
-    uint8_t *temp_buf;
-    int      i;
-    int      timeouts;
+    int          bytes_received;
+    int          bytes_remaining;
+    uint8_t     *temp_buf;
+    int          i;
+    int          timeouts;
+    unsigned int timeout_ms = 250;
 
     //Check for invalid input
     if (size < 0 || max_timeouts < 0){
@@ -866,18 +866,20 @@ int link_receive_data(struct link_handle *link, int size, int max_timeouts,
         memmove(link->rx->extra_bytes, &(link->rx->extra_bytes[size]),
                 link->rx->num_extra_bytes - size);
         i = size;
+        link->rx->num_extra_bytes -= size;
         goto out;
     }else{
         memcpy(data_buf, link->rx->extra_bytes, link->rx->num_extra_bytes);
         i = link->rx->num_extra_bytes;
+        link->rx->num_extra_bytes = 0;
     }
 
     while(i < size && timeouts < max_timeouts){
         bytes_remaining = size - i;
         //Make sure to not write more than 'size' bytes. For the last payload(s),
         //Use a temp buffer first
-        if (bytes_remaining < link->payload_length){
-            bytes_received = receive_payload(link, temp_buf, 500);
+        if (bytes_remaining < (int)link->payload_length){
+            bytes_received = receive_payload(link, temp_buf, timeout_ms);
             //Check for timeout
             if (bytes_received == -2){
                 timeouts++;
@@ -896,11 +898,11 @@ int link_receive_data(struct link_handle *link, int size, int max_timeouts,
                 //Copy extra bytes to extra_bytes buffer
                 link->rx->num_extra_bytes = bytes_received - bytes_remaining;
                 memcpy(link->rx->extra_bytes, &temp_buf[bytes_remaining],
-                        link->rx->num_extra_bytes);
+                       link->rx->num_extra_bytes);
             }
         //For all other payloads
         }else{
-            bytes_received = receive_payload(link, &data_buf[i], 500);
+            bytes_received = receive_payload(link, &data_buf[i], timeout_ms);
             //Check for timeout
             if (bytes_received == -2){
                 timeouts++;
@@ -938,7 +940,7 @@ int link_receive_data(struct link_handle *link, int size, int max_timeouts,
  */
 static int receive_payload(struct link_handle *link, uint8_t *payload, unsigned int timeout_ms)
 {
-    int payload_length = 10;    //must be initialized above 0
+    int used_payload_length = 10;    //must be initialized above 0
     struct timespec timeout_abs;
     int status;
 
@@ -958,14 +960,14 @@ static int receive_payload(struct link_handle *link, uint8_t *payload, unsigned 
     //Wait for condition signal - meaning rx data buffer is full
     while (!link->rx->data_buf_filled){
         status = pthread_cond_timedwait(&(link->rx->data_buf_filled_cond),
-                                    &(link->rx->data_buf_status_lock), &timeout_abs);
+                                        &(link->rx->data_buf_status_lock), &timeout_abs);
         if (status != 0){
             if (status == ETIMEDOUT){
-                payload_length = -2;
+                used_payload_length = -2;
             }else{
                 ERROR("RX: receive_payload(): "
                       "Condition wait failed: %s\n", strerror(status));
-                payload_length = -1;
+                used_payload_length = -1;
             }
             break;
         }
@@ -974,21 +976,21 @@ static int receive_payload(struct link_handle *link, uint8_t *payload, unsigned 
     status = pthread_mutex_unlock(&(link->rx->data_buf_status_lock));
     if (status != 0){
         ERROR("RX: receive_payload(): Mutex unlock failed: %s\n", strerror(status));
-        payload_length = -1;
+        used_payload_length = -1;
     }
     //Did we error or timeout? Return
-    if (payload_length < 0){
-        return payload_length;
+    if (used_payload_length < 0){
+        return used_payload_length;
     }
 
     //Get the length of the used portion of the payload
-    payload_length = link->rx->data_frame_buf.used_payload_length;
+    used_payload_length = link->rx->data_frame_buf.used_payload_length;
     //Copy the used portion of the payload
-    memcpy(payload, link->rx->data_frame_buf.payload, payload_length);
+    memcpy(payload, link->rx->data_frame_buf.payload, used_payload_length);
     //Mark the rx data buffer empty
     link->rx->data_buf_filled = false;
 
-    return payload_length;
+    return used_payload_length;
 }
 
 /**
@@ -1102,11 +1104,11 @@ void *receive_frames(void *arg)
                 if (rx_buf[0] == DATA_FRAME_CODE){
                     DEBUG_MSG("RX: Received a data frame\n");
                     is_data_frame = true;
-                    frame_length = link->frame_length;
+                    frame_length  = link->frame_length;
                 }else{
                     DEBUG_MSG("RX: Received a ack frame\n");
                     is_data_frame = false;
-                    frame_length = ACK_FRAME_LENGTH;
+                    frame_length  = ACK_FRAME_LENGTH;
                 }
                 //Copy the received CRC
                 memcpy(&crc_32_rx, &rx_buf[frame_length - sizeof(crc_32)],

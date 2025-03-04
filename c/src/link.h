@@ -68,7 +68,7 @@ int link_send_data(struct link_handle *link, uint8_t *data, unsigned int data_le
  *
  * @param[in]   link            pointer to link handle
  * @param[in]   size            number of bytes to attempt to receive
- * @param[in]   max_timeouts    max number of 0.5 second timeouts before the function
+ * @param[in]   max_timeouts    max number of 0.25 second timeouts before the function
  *                              returns
  * @param[out]  data_buf        buffer to place received bytes in
  *

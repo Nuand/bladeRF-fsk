@@ -32,23 +32,21 @@
 #include "link.h"
 #include "config.h"
 
-//This should be a multiple of PAYLOAD_LENGTH for best throughput
-#define DATA_BUF_SIZE PAYLOAD_LENGTH
-
 struct bladerf_fsk_handle {
     struct link_handle *link;
+    unsigned int        payload_length; //payload length per link layer frame
     struct {
-        FILE *in;
-        long int filesize;
+        FILE     *in;
+        long int  filesize;
         pthread_t thread;
-        bool stop;
-        bool on;
+        bool      stop;
+        bool      on;
     } tx;
     struct {
-        FILE *out;
+        FILE     *out;
         pthread_t thread;
-        bool stop;
-        bool on;
+        bool      stop;
+        bool      on;
     } rx;
 };
 
@@ -69,17 +67,28 @@ void *sender(void *arg)
 {
     int status;
     struct bladerf_fsk_handle *handle = (struct bladerf_fsk_handle *) arg;
-    uint8_t tx_data[PAYLOAD_LENGTH];
-    char *result;
-    size_t num_bytes;
-    size_t bytes_sent;
+    uint8_t *tx_data;   //data buffer
+    char    *result;
+    size_t   num_bytes;
+    size_t   bytes_sent;
+    size_t   tx_data_size;
+
+    //--allocate memory for data buffer
+    //For efficient file transmission, want a multiple of payload length, large enough
+    //(~2000 bytes) for efficient reads when sending a file in many chunks, also large
+    //enough to handle a large string input to the command line when using stdin.
+    tx_data_size = (size_t)ceil(2000.0/handle->payload_length) * handle->payload_length;
+    tx_data      = malloc(tx_data_size);
+    if (tx_data == NULL){
+        perror("malloc");
+        return NULL;
+    }
 
     bytes_sent = 0;
     while(!handle->tx.stop){
         //Get input data
         if (handle->tx.in == stdin){
-            memset(tx_data, 0, sizeof(tx_data));
-            result = fgets((char *) tx_data, sizeof(tx_data), stdin);
+            result = fgets((char *) tx_data, tx_data_size, stdin);
             if (result == NULL){
                 break;
             }
@@ -89,7 +98,7 @@ void *sender(void *arg)
             fprintf(stderr, "\rSent: %d%%   ",
                     (int)roundf((float)bytes_sent/handle->tx.filesize * 100));
             //Read next chunk from file
-            num_bytes = fread(tx_data, 1, sizeof(tx_data), handle->tx.in);
+            num_bytes = fread(tx_data, 1, tx_data_size, handle->tx.in);
             if (num_bytes == 0){
                 fprintf(stderr, "\n");
                 break;    //EOF
@@ -107,12 +116,16 @@ void *sender(void *arg)
         }
         bytes_sent += num_bytes;
     }
+
+    if (tx_data != NULL){
+        free(tx_data);
+    }
     return NULL;
 }
 
 /**
  * Thread function which receives bytes with link_receive_data() and writes them
- * to the output FILE pointer. Thread will return within 0.5 seconds if
+ * to the output FILE pointer. Thread will return within 0.25 seconds if
  * handle->rx_stop is true.
  *
  * @param[in]   arg     pointer to bladerf_fsk_handle
@@ -120,7 +133,7 @@ void *sender(void *arg)
 void *receiver(void *arg)
 {
     struct bladerf_fsk_handle *handle = (struct bladerf_fsk_handle *) arg;
-    uint8_t rx_data[PAYLOAD_LENGTH];
+    uint8_t rx_data[2000];
     int bytes_received;
     size_t nwritten;
 
@@ -176,13 +189,14 @@ struct bladerf_fsk_handle *start(struct config *config)
         goto error;
     }
 
+    handle->payload_length = config->payload_length;
     //Set input/output files
-    handle->tx.in = config->tx_input;
-    handle->tx.filesize = config->tx_filesize;
-    handle->rx.out = config->rx_output;
+    handle->tx.in          = config->tx_input;
+    handle->tx.filesize    = config->tx_filesize;
+    handle->rx.out         = config->rx_output;
 
     //Init the link
-    handle->link = link_init(config->bladerf_dev, &config->params);
+    handle->link = link_init(config->bladerf_dev, &config->params, config->payload_length);
     if (handle->link == NULL){
         goto error;
     }
@@ -247,7 +261,7 @@ void stop(struct bladerf_fsk_handle *handle)
  */
 int main(int argc, char *argv[])
 {
-    struct config *config = NULL;
+    struct config             *config = NULL;
     struct bladerf_fsk_handle *handle = NULL;
     int status;
 
