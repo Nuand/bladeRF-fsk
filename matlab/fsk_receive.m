@@ -84,8 +84,12 @@ if (stopband < 1)
    iq_signal = filter(b, 1, iq_signal);
 end
 
-%Normalize signal to [-1, 1]
-iq_signal         = iq_signal / max([ max(real(iq_signal)) max(imag(iq_signal)) ]);
+%Power normalize signal to roughly [-1, 1], following algorithm in C implementation
+pnorm_alpha       = 0.95;
+pnorm_min_gain    = 0.1;
+pnorm_max_gain    = 20;
+[iq_signal,~,~]   = pnorm(iq_signal, 1, pnorm_alpha, pnorm_min_gain, pnorm_max_gain);
+%iq_signal         = iq_signal / max([ max(real(iq_signal)) max(imag(iq_signal)) ]);
 info.iq_filt_norm = iq_signal;
 
 %Correlate input IQ signal with known preamble waveform

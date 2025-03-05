@@ -91,7 +91,7 @@ null_amt = 200;
 if rand_input
    %Create random data
    fprintf('Generating %d bytes of random data\n', rand_nbytes);
-   rng(0);  %set seed for consistent output
+   rng(5);  %set seed for consistent output
    tx_bits = randi([0, 255], 1, rand_nbytes);
    tx_bits = dec2bin(uint8(tx_bits), 8);
 else
@@ -187,7 +187,7 @@ if use_file
 else
    %--Add gaussian noise and attenuation to signal
    %Noise power desired in channel (units dBW)
-   noise_pow = -25;
+   noise_pow = -5;
    %gain desired in channel (this should be less than 1)
    gain      = 0.6;
    noise     = wgn(1, length(tx_sig), noise_pow) + 1j*wgn(1, length(tx_sig), noise_pow);
@@ -239,7 +239,14 @@ xlabel('frequency [Hz]');
 ylabel('power [dB]');
 title('RX raw spectrum');
 
-%RX filtered IQ samples
+%RX filtered/normalized spectrum
+figure('position', [0 0 960 200]);
+pwelch(rx_info.iq_filt_norm, [], [], 16384, Fs, plot_freqrange, 'dB');
+xlabel('frequency [Hz]');
+ylabel('power [dB]');
+title('RX filtered+normalized spectrum');
+
+%RX filtered/normalized IQ samples
 figure('position', [0 0 960 200]);
 plot(real(rx_info.iq_filt_norm));
 hold on;
