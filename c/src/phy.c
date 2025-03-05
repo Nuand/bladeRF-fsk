@@ -877,17 +877,6 @@ void *phy_receive_frames(void *arg)
                     timestamp = metadata.timestamp;
                 #endif
 
-                #ifdef LOG_RX_SAMPLES
-                    //Write samples out to binary file
-                    nwritten = fwrite(phy->rx->in_samples, sizeof(int16_t),
-                                      num_samples_rx_act*2, phy->rx->samples_file);
-                    if (nwritten != (size_t)(num_samples_rx_act*2)){
-                        ERROR("Failed to write all samples to RX debug file: %s\n",
-                              strerror(errno));
-                        goto out;
-                    }
-                #endif
-
                 #ifndef BYPASS_RX_CHANNEL_FILTER
                     // Apply channel filter
                     fir_process(phy->rx->ch_filt, phy->rx->in_samples,
@@ -904,6 +893,24 @@ void *phy_receive_frames(void *arg)
                     memcpy(phy->rx->pnorm_samples, phy->rx->filt_samples,
                            num_samples_rx_act * sizeof(struct complex_sample));
                 #endif
+
+                #ifdef LOG_RX_SAMPLES
+                    #ifdef LOG_RX_SAMPLES_USE_PNORM
+                        //Write filtered+power normalized samples out to binary file
+                        nwritten = fwrite((int16_t *)phy->rx->pnorm_samples, sizeof(int16_t),
+                                          num_samples_rx_act*2, phy->rx->samples_file);
+                    #else
+                        //Write raw samples out to binary file
+                        nwritten = fwrite(phy->rx->in_samples, sizeof(int16_t),
+                                          num_samples_rx_act*2, phy->rx->samples_file);
+                    #endif
+                    if (nwritten != (size_t)(num_samples_rx_act*2)){
+                        ERROR("Failed to write all samples to RX debug file: %s\n",
+                              strerror(errno));
+                        goto out;
+                    }
+                #endif
+
                 if (preamble_detected){
                     state = DEMOD;
                 }else{
