@@ -187,7 +187,7 @@ if use_file
 else
    %--Add gaussian noise and attenuation to signal
    %Noise power desired in channel (units dBW)
-   noise_pow = -5;
+   noise_pow = -25;
    %gain desired in channel (this should be less than 1)
    gain      = 0.6;
    noise     = wgn(1, length(tx_sig), noise_pow) + 1j*wgn(1, length(tx_sig), noise_pow);
