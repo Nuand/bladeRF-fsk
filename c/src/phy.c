@@ -323,13 +323,13 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params,
     phy->max_frame_size = max_frame_size;
 
     #ifdef BYPASS_RX_CHANNEL_FILTER
-        DEBUG_MSG("Info: Bypassing rx channel filter\n");
+        NOTE("Info: Bypassing rx channel filter\n");
     #endif
     #ifdef BYPASS_RX_PNORM
-        DEBUG_MSG("Info: Bypassing rx power normalization\n");
+        NOTE("Info: Bypassing rx power normalization\n");
     #endif
     #ifdef BYPASS_PHY_SCRAMBLING
-        DEBUG_MSG("Info: Bypassing scrambling\n");
+        NOTE("Info: Bypassing scrambling\n");
     #endif
 
     DEBUG_MSG("Initialization done\n");

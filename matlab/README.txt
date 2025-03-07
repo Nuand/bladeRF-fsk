@@ -1,5 +1,6 @@
-This set of MATLAB model files will generate/receive binary CPFSK baseband waveforms. Only models the physical layer portion of the modem, does not include link layer.
-Works on both MATLAB and GNU Octave.
+This set of MATLAB model files will generate/receive binary CPFSK baseband waveforms. Only
+models the physical layer portion of the modem, does not include link layer.
+Works on both MATLAB and GNU Octave, however it may not be fully tested in MATLAB.
 
 Run fsk.m to simulate the FSK modem
 - Set use_file=1 to write/read IQ samples to/from a file so they can be
@@ -14,15 +15,17 @@ fsk_demod(): FSK baseband demodulator function
 - extracts the bit sequence of the given CPFSK baseband waveform
 
 fsk_transmit(): Generates baseband signal for an FSK frame
-- Calls fsk_mod() with FSK frame, which includes training sequence and preamble
-  in addition to user data
+- Applies scrambling to input data bits
+- Adds training sequence and preamble to create full FSK frame
+- Calls fsk_mod() to modulate FSK frame into an IQ signal
 - Adds a ramp up/ramp down to the beginning/end of the signal
 
 fsk_receive(): Receives an FSK frame from a baseband signal
-- Low-pass filters and normalizes the input signal
+- Low-pass filters and power normalizes the input signal
 - Correlates the input signal with the given preamble waveform to determine
   start of FSK data
 - Calls fsk_demod() to extract bits from the FSK data signal
+- Descrambles output data bits
 
 fsk.m: Script for simulating the modem
 - prompts for an input string (spaces are welcome) or generates random data

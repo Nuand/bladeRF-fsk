@@ -18,11 +18,11 @@
 % 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 %-------------------------------------------------------------------------
 
-function [iq_samples] = fsk_transmit(training_seq, preamble, data, ...
+function [iq_samples] = fsk_transmit(training_seq, preamble, data, scrambling_seed, ...
                                      samps_per_symb, mod_index)
 % FSK_TRANSMIT Produce a baseband FSK signal of the input binary data, with
 % a ramp up/ramp down at the beginning/end of the signal.
-%    [IQ_SAMPLES] = fsk_transmit(TRAINING_SEQ, PREAMBLE, DATA,
+%    [IQ_SAMPLES] = fsk_transmit(TRAINING_SEQ, PREAMBLE, DATA, SCRAMBLING_SEED
 %                                SAMPS_PER_SYMB, MOD_INDEX);
 %
 %    TRAINING_SEQ is a matrix of training sequence bits to transmit. Format
@@ -47,6 +47,9 @@ function [iq_samples] = fsk_transmit(training_seq, preamble, data, ...
 %    this bit matrix format, and bin2dec(bits) to convert a bit matrix to a
 %    string
 %
+%    SCRAMBLING_SEED the unsigned 64-bit seed used to create scrambling sequence. Leave
+%    empty [] to disable scrambling
+%
 %    SAMPS_PER_SYMB number of samples per symbol
 %
 %    MOD_INDEX phase modulation index: the phase deviation per symbol
@@ -58,7 +61,14 @@ function [iq_samples] = fsk_transmit(training_seq, preamble, data, ...
 %    The ramps at the beginning/end of the signal have a length of
 %    'samps_per_symb'
 
-%----Assemble bitstream to transmit
+if ~isempty(scrambling_seed)
+   %--Apply scrambling to data bits
+   scrambling_seq = prng(scrambling_seed, size(data, 1)).';
+   %XOR data bytes with scrambling sequence
+   data           = dec2bin( bitxor(bin2dec(data), scrambling_seq), 8 );
+end
+
+%----Assemble full bitstream to transmit
 %| training sequence | preamble | data |
 bits = [training_seq; preamble; data];
 

@@ -20,12 +20,12 @@
 
 function [bits, info] = fsk_receive(preamble_waveform, iq_signal, ...
                                     decimation_factor, samps_per_symb, ...
-                                    h, num_bytes)
+                                    h, num_bytes, scrambling_seed)
 % FSK_RECEIVE Demodulate/receive data bits from an FSK baseband IQ signal.
 % Correlates the iq_signal with the given preamble waveform to find the
 % start of the data signal
 %    [BITS, INFO] = fsk_receive(PREAMBLE_WAVEFORM, IQ_SIGNAL,
-%                              SAMPS_PER_SYMB, NUM_BYTES);
+%                              SAMPS_PER_SYMB, NUM_BYTES, SCRAMBLING_SEED);
 %
 %    PREAMBLE_WAVEFORM preamble iq samples waveform to determine start of
 %    data in the the iq_signal
@@ -40,6 +40,10 @@ function [bits, info] = fsk_receive(preamble_waveform, iq_signal, ...
 %    H modulation index used on the transmitted signal
 %
 %    NUM_BYTES number of data bytes to demodulate from the iq_signal
+%
+%    SCRAMBLING_SEED the unsigned 64 bit seed used to create descrambling sequence. Must
+%    match scrambling seed on the TX side for proper descrambling. Leave empty [] to
+%    bypass descrambling.
 %
 %    BITS is an Nx8 matrix of received bits. Each bit element in
 %    the matrix is a char which can either be '1' or '0'. Each row of the
@@ -120,5 +124,12 @@ info.sig_start_idx = sig_start_idx;
 %Demodulate bits from the IQ signal at the start index
 [bits, info.dphase, info.dphase_sym] = ...
    fsk_demod(iq_signal(sig_start_idx:end), samps_per_symb, num_bytes);
+
+if ~isempty(scrambling_seed)
+   %--Descramble data bits
+   scrambling_seq = prng(scrambling_seed, size(bits, 1)).';
+   %XOR data bytes with scrambling sequence
+   bits           = dec2bin( bitxor(bin2dec(bits), scrambling_seq), 8 );
+end
 
 end

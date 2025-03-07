@@ -14,9 +14,9 @@
 %  max_gain:   Maximum gain that is allowed to be applied to input samples
 %OUTPUTS
 %  iq_out:     Output complex samples
-%  est_powers: Power estimates computed for each input sample, using a weighted average
-%              of that sample and the previous estimate
-%  gains:      Gains applied to each input sample to produce the output sample
+%  est_power:  Power estimates computed for each input sample, using a weighted average
+%              of that sample's power and the previous estimate
+%  gain:       Gains applied to each input sample to produce the output sample
 %
 % This file is part of the bladeRF-fsk project
 %
@@ -36,56 +36,45 @@
 % with this program; if not, write to the Free Software Foundation, Inc.,
 % 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 %-------------------------------------------------------------------------
-function [iq_out, est_powers, gains] = pnorm(iq_in, max_abs, alpha, min_gain, max_gain)
+function [iq_out, est_power, gain] = pnorm(iq_in, max_abs, alpha, min_gain, max_gain)
 
 clamp_val_abs = 1.5*max_abs;
-est_power     = 1; %initial power estimate
 iq_out        = zeros(1, length(iq_in));
-est_powers    = zeros(1, length(iq_in));
-gains         = zeros(1, length(iq_in));
+est_power     = zeros(1, length(iq_in));
+gain          = zeros(1, length(iq_in));
 
-for i=1:length(iq_in)
-   %calculate instantaneous power normalized to max sample value
-   inst_power = (real(iq_in(i))^2 + imag(iq_in(i))^2)/max_abs^2;
-   %calculate running power estimate using current estimate + instantaneous power
-   est_power = alpha*est_power + (1-alpha)*inst_power;
-   %ideal power is 1.0, so multiply by 1.0/sqrt(est_power) to try to reach 1.0
-   gain = 1/sqrt(est_power);
+%calculate instantaneous power normalized to max sample value
+inst_power = (real(iq_in).^2 + imag(iq_in).^2)/max_abs^2;
 
-   %check if exceeds bounds of min/max gain
-   if gain < min_gain
-      gain = min_gain;
-   elseif gain > max_gain;
-      gain = max_gain;
-   end
+%IIR filter to calculate running power estimate
+%y[n] = alpha*y[n-1] + (1-alpha)*x[n]     (y[n]=est_power, x[n]=inst_power)
+%b = [1-alpha] and a = [1, -alpha]
+%want initial y[n-1] to be 1.0, so initial condition of alpha*y[n-1] = alpha
+est_power = filter([1-alpha], [1, -alpha], inst_power, alpha);
 
-   %apply gain
-   iq_out_i = real(iq_in(i))*gain;
-   iq_out_q = imag(iq_in(i))*gain;
+%ideal power is 1.0, so multiply by 1.0/sqrt(est_power) to try to reach 1.0
+gain = 1./sqrt(est_power);
 
-   %clamp
-   %I
-   if iq_out_i > clamp_val_abs
-      iq_out_i = clamp_val_abs;
-   elseif iq_out_i < -clamp_val_abs
-      iq_out_i = -clamp_val_abs;
-   end
-   %Q
-   if iq_out_q > clamp_val_abs
-      iq_out_q = clamp_val_abs;
-   elseif iq_out_q < -clamp_val_abs
-      iq_out_q = -clamp_val_abs;
-   end
-   iq_out(i) = complex(iq_out_i, iq_out_q);
+%check if exceeds bounds of min/max gain
+gain(gain < min_gain) = min_gain;
+gain(gain > max_gain) = max_gain;
 
-   %blank impulse power
-   out_power = (real(iq_out(i))^2 + imag(iq_out(i))^2)/max_abs^2;
-   if out_power >= 10
-      iq_out(i) = 0;
-   end
+%apply gain
+iq_out_i = real(iq_in).*gain;
+iq_out_q = imag(iq_in).*gain;
 
-   est_powers(i) = est_power;
-   gains(i)      = gain;
-end
+%clamp
+%I
+iq_out_i(iq_out_i >  clamp_val_abs) =  clamp_val_abs;
+iq_out_i(iq_out_i < -clamp_val_abs) = -clamp_val_abs;
+%Q
+iq_out_q(iq_out_q >  clamp_val_abs) =  clamp_val_abs;
+iq_out_q(iq_out_q < -clamp_val_abs) = -clamp_val_abs;
+
+iq_out = complex(iq_out_i, iq_out_q);
+
+%blank impulse power
+out_power               = (real(iq_out).^2 + imag(iq_out).^2)/max_abs^2;
+iq_out(out_power >= 10) = 0;
 
 end
