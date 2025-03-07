@@ -147,17 +147,16 @@ the program. Try increasing the TX gain and run it again.
 
 ## Known Limitations ##
 1) The program does not currently support the use of an XB-200 transverter expansion
-   board to transmit/receive at frequencies below 300MHz. In order to add XB-200 support,
-   a new configuration option as well as functions from the "Expansion boards" section
-   of the libbladeRF API would need to be added to the source code.
+   board for the bladeRF 1 to transmit/receive at frequencies below 300MHz. In order to
+   add XB-200 support, a new configuration option as well as functions from the
+   "Expansion boards" section of the libbladeRF API would need to be added to the source
+   code.
 
-2) The program is currently unable to perform two file transfers in both directions
-   simultaneously. Reason #1: The program runs until is gets an EOF in its TX input,
+2) The program is currently unable to perform two full file transfers in both directions
+   simultaneously. Reason: The program runs until is gets an EOF in its TX input,
    meaning whichever side finishes transmitting its file first will quit and stop
    receiving. An EOF bit would need to be added to the link layer packet format in order
-   to stop this behavior. Reason #2: The program doesn't seem to perform well during
-   these simultaneous file transfers, and usually loses connection. Further investigation
-   is required to debug this.
+   to stop this behavior.
 
 ## Modem Details ##
 ### Waveform Specifications ###
