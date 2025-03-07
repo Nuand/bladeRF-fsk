@@ -104,7 +104,7 @@ if ~no_tx
    if rand_input
       %Create random data
       fprintf('Generating %d bytes of random data to TX\n', rand_nbytes);
-      rng(5);  %set seed for consistent output
+      %rng(5);  %set seed for consistent output
       tx_bits = randi([0, 255], 1, rand_nbytes);
       tx_bits = dec2bin(uint8(tx_bits), 8);
    else
@@ -177,20 +177,23 @@ if ~no_tx
    elseif ~no_rx
       %--Add gaussian noise and attenuation to signal
       %Noise power desired in channel (units dBW)
-      noise_pow = -25;
-      %gain desired in channel (this should be less than 1)
-      gain      = 0.6;
-      noise     = wgn(1, length(tx_sig), noise_pow) + 1j*wgn(1, length(tx_sig), noise_pow);
-      rx_sig    = gain*tx_sig + noise;
+      noise_pow   = -20;
+      %gain magnitude desired in channel (this should be less than 1)
+      chan_gain   = 0.6;
+      %phase change from channel
+      chan_phase  = rand*2*pi;
+      rx_sig_chan = chan_gain*exp(1j*chan_phase)*tx_sig;  %RX sig with only channel effects
+      noise       = wgn(1, length(tx_sig), noise_pow, 'complex');
 
-      %clamp signal to [-1.0, 1.0]
-      rx_sig_i = real(rx_sig);
-      rx_sig_q = imag(rx_sig);
-      rx_sig_i(rx_sig_i >  1.0) =  1.0;
-      rx_sig_i(rx_sig_i < -1.0) = -1.0;
-      rx_sig_q(rx_sig_q >  1.0) =  1.0;
-      rx_sig_q(rx_sig_q < -1.0) = -1.0;
-      rx_sig = complex(rx_sig_i, rx_sig_q);
+      rx_sig      = rx_sig_chan + noise;
+
+      %measure SNR, using only the portion of rx_sig that contains the FSK signal
+      snr_meas    = 10*log10( mean(abs(rx_sig_chan(null_amt+1:end-null_amt)).^2) /
+                              mean(abs(noise      (null_amt+1:end-null_amt)).^2) );
+      fprintf('Note: SNR = %.2f dB\n', snr_meas);
+
+      %normalize to [-1.0, 1.0] mimicking our 12 bit limit
+      rx_sig = rx_sig/max(abs(rx_sig));
    end
 end
 

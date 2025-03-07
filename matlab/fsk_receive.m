@@ -101,6 +101,9 @@ info.iq_filt_norm = iq_signal;
 iq_signal_dec         = iq_signal(1:decimation_factor:end);
 preamble_waveform_dec = preamble_waveform(1:decimation_factor:end);
 corr                  = xcorr(iq_signal_dec, preamble_waveform_dec);
+%remove initial 0s (from implicit zero padding of preamble_waveform_dec inside xcorr())
+num_padded_zeros      = length(iq_signal_dec) - length(preamble_waveform_dec);
+corr                  = corr(num_padded_zeros+1:end);
 info.preamble_corr    = corr;
 
 %Find peak in cross correlation power (i^2 + q^2)
@@ -112,11 +115,8 @@ if peak < corr_peak_thresh
    return;
 end
 
-%Calculate iq_signal start index based on this peak
-%Number of zeros that were padded to the end of preamble waveform inside
-%the xcorr() function so that both vectors were the same length:
-num_padded_zeros   = length(iq_signal_dec) - length(preamble_waveform_dec);
-sig_start_idx      = peak_idx - num_padded_zeros;
+%decimated iq_signal start index based on this peak
+sig_start_idx      = peak_idx;
 %Calculate the un-decimated iq_signal start index
 sig_start_idx      = (sig_start_idx-1) * decimation_factor + 1;
 info.sig_start_idx = sig_start_idx;
