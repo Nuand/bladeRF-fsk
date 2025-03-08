@@ -89,12 +89,11 @@ if (stopband < 1)
 end
 
 %Power normalize signal to roughly [-1, 1], following algorithm in C implementation
-pnorm_alpha       = 0.95;
-pnorm_min_gain    = 0.1;
-pnorm_max_gain    = 20;
-[iq_signal,~,~]   = pnorm(iq_signal, 1, pnorm_alpha, pnorm_min_gain, pnorm_max_gain);
-%iq_signal         = iq_signal / max([ max(real(iq_signal)) max(imag(iq_signal)) ]);
-info.iq_filt_norm = iq_signal;
+pnorm_alpha             = 0.95;
+pnorm_min_gain          = 0.1;
+pnorm_max_gain          = 20;
+[iq_signal,est_power,~] = pnorm(iq_signal, 1, pnorm_alpha, pnorm_min_gain, pnorm_max_gain);
+info.iq_filt_norm       = iq_signal;
 
 %Correlate input IQ signal with known preamble waveform
 %Decimate iq signal and preamble waveform
@@ -120,6 +119,20 @@ sig_start_idx      = peak_idx;
 %Calculate the un-decimated iq_signal start index
 sig_start_idx      = (sig_start_idx-1) * decimation_factor + 1;
 info.sig_start_idx = sig_start_idx;
+
+%Estimate SNR using the power estimate in the middle of the frame (signal+noise, S+N) and
+%the power estimate just before the frame (noise, N). S = (S+N) - N.
+
+%(S+N) power: Use est_power at frame data start. At this point, the training sequence and
+%and preamble have come through, so est_power has had time to stabilize.
+signoise_pwr_est = est_power(sig_start_idx);
+%N power: Use est_power before the ramp up to the training sequence
+training_len     = 4;
+noise_pwr_est    = est_power(sig_start_idx - length(preamble_waveform) - ...
+                             training_len*8*samps_per_symb - samps_per_symb);
+sig_pwr_est      = signoise_pwr_est - noise_pwr_est;
+snr_est          = 10*log10(sig_pwr_est / noise_pwr_est);
+fprintf('Note: RX post-filter SNR estimate = %.2f dB\n', snr_est);
 
 %Demodulate bits from the IQ signal at the start index
 [bits, info.dphase, info.dphase_sym] = ...

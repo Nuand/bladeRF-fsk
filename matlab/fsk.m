@@ -194,6 +194,14 @@ if ~no_tx
 
       %normalize to [-1.0, 1.0] mimicking our 12 bit limit
       rx_sig = rx_sig/max(abs(rx_sig));
+
+%      %DEBUG: estimate SNR using portion of rx_sig containing signal, comparing to noise only
+%      %we get S+N and N. S ~= (S+N) - N
+%      signoise_pwr = mean(abs(rx_sig(null_amt+1:end-null_amt)).^2)
+%      noise_pwr    = mean(abs(rx_sig([1:null_amt,end-null_amt+1:end])).^2)
+%      sig_pwr_est  = signoise_pwr - noise_pwr;
+%      snr_est      = 10*log10(sig_pwr_est / noise_pwr);
+%      fprintf('Note: SNR estimate = %.2f dB\n', snr_est);
    end
 end
 
@@ -250,20 +258,24 @@ if ~no_rx
    plot(real(rx_info.iq_filt_norm));
    hold on;
    plot(imag(rx_info.iq_filt_norm));
-   %symbol boundaries
-   first_sym_start = rx_info.sig_start_idx-(numel(training_seq)+numel(preamble))*samps_per_symb;
-   preamble_start  = first_sym_start + numel(training_seq)*samps_per_symb;
-   data_start      = preamble_start  + numel(preamble)    *samps_per_symb;
-   last_sym_end    = data_start      + rx_nbytes*8        *samps_per_symb;
+   if rx_bits(1) ~= -1
+      %symbol boundaries
+      first_sym_start = rx_info.sig_start_idx-(numel(training_seq)+numel(preamble))*samps_per_symb;
+      preamble_start  = first_sym_start + numel(training_seq)*samps_per_symb;
+      data_start      = preamble_start  + numel(preamble)    *samps_per_symb;
+      last_sym_end    = data_start      + rx_nbytes*8        *samps_per_symb;
 
-   plot(repmat(first_sym_start, 1, 2), [-1 1], '--');
-   plot(repmat(preamble_start,  1, 2), [-1 1], '--');
-   plot(repmat(data_start,      1, 2), [-1 1], '--');
-   plot(repmat(last_sym_end,    1, 2), [-1 1], '--');
+      plot(repmat(first_sym_start, 1, 2), [-1 1], '--');
+      plot(repmat(preamble_start,  1, 2), [-1 1], '--');
+      plot(repmat(data_start,      1, 2), [-1 1], '--');
+      plot(repmat(last_sym_end,    1, 2), [-1 1], '--');
 
-   plot(first_sym_start:samps_per_symb  :last_sym_end, zeros(1, rx_nsym+1),   '*r');
-   plot(first_sym_start:samps_per_symb*8:last_sym_end, zeros(1, rx_nsym/8+1), '*g');
-   legend('I', 'Q', 'training start', 'preamble start', 'data start', 'data end', 'sym boundaries', 'byte boundaries');
+      plot(first_sym_start:samps_per_symb  :last_sym_end, zeros(1, rx_nsym+1),   '*r');
+      plot(first_sym_start:samps_per_symb*8:last_sym_end, zeros(1, rx_nsym/8+1), '*g');
+      legend('I', 'Q', 'training start', 'preamble start', 'data start', 'data end', 'sym boundaries', 'byte boundaries');
+   else
+      legend('I', 'Q');
+   end
    xlabel('samp idx');
    title('RX filtered & normalized IQ samples');
 
@@ -299,15 +311,20 @@ if ~no_rx
    end
 
    %---------------------Print received data-------------------
-   if (rx_bits(1) ~= -1)
+   if rx_bits(1) ~= -1
       fprintf('Received           : ''%s''\n', bin2dec(rx_bits));
       if ~no_tx
          if isequal(rx_bits, tx_bits)
             fprintf('RX data matched TX data\n');
          else
-            fprintf(2, 'RX data did not match TX data\n');
+            tx_bits_flat   = reshape(tx_bits(:,end:-1:1).', 1, []);
+            rx_bits_flat   = reshape(rx_bits(:,end:-1:1).', 1, []);
+            bit_mismatches = tx_bits_flat ~= rx_bits_flat;
+
+            fprintf(2, 'RX data did not match TX data. %d bit mismatches (%.2f%%)\n', ...
+                       sum(bit_mismatches), sum(bit_mismatches)/length(bit_mismatches)*100);
+
             figure('position', [0 0 960, 200]);
-            bit_mismatches = reshape(tx_bits(:,end:-1:1).', 1, []) ~=  reshape(rx_bits(:,end:-1:1).', 1, []);
             fprintf('   First bit mismatch at index %d\n', find(bit_mismatches, 1));
             plot(bit_mismatches);
             title('bit mismatches (1=mismatch)');
