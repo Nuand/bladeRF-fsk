@@ -17,6 +17,8 @@
 %  est_power:  Power estimates computed for each input sample, using a weighted average
 %              of that sample's power and the previous estimate
 %  gain:       Gains applied to each input sample to produce the output sample
+%  settle_time:Amount of time (in samples) for iq_out/est_power/gain to settle 99.9% of
+%              the way after a change in the input power
 %
 % This file is part of the bladeRF-fsk project
 %
@@ -36,12 +38,22 @@
 % with this program; if not, write to the Free Software Foundation, Inc.,
 % 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 %-------------------------------------------------------------------------
-function [iq_out, est_power, gain] = pnorm(iq_in, max_abs, alpha, min_gain, max_gain)
+function [iq_out, est_power, gain, settle_time] = pnorm(iq_in, max_abs, alpha, ...
+                                                        min_gain, max_gain)
 
 clamp_val_abs = 1.5*max_abs;
 iq_out        = zeros(1, length(iq_in));
 est_power     = zeros(1, length(iq_in));
 gain          = zeros(1, length(iq_in));
+
+%compute settling time
+%equation derivation:
+%p            = 1 - alpha^n; p = the output percentage, n = num samples to reach it
+%alpha^n      = 1 - p
+%n*log(alpha) = log(1-p)
+%n            = log(1-p)/log(alpha)
+settle_percent = .999;  %compute for 99.9%
+settle_time    = ceil(log(1-settle_percent)/log(alpha));
 
 %calculate instantaneous power normalized to max sample value
 inst_power = (real(iq_in).^2 + imag(iq_in).^2)/max_abs^2;

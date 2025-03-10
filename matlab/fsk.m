@@ -190,7 +190,7 @@ if ~no_tx
       %measure SNR, using only the portion of rx_sig that contains the FSK signal
       snr_meas    = 10*log10( mean(abs(rx_sig_chan(null_amt+1:end-null_amt)).^2) /
                               mean(abs(noise      (null_amt+1:end-null_amt)).^2) );
-      fprintf('Note: SNR = %.2f dB\n', snr_meas);
+      fprintf('\nNote: Input SNR = %.2f dB\n', snr_meas);
 
       %normalize to [-1.0, 1.0] mimicking our 12 bit limit
       rx_sig = rx_sig/max(abs(rx_sig));
@@ -312,7 +312,7 @@ if ~no_rx
 
    %---------------------Print received data-------------------
    if rx_bits(1) ~= -1
-      fprintf('Received           : ''%s''\n', bin2dec(rx_bits));
+      fprintf('\nReceived           : ''%s''\n', bin2dec(rx_bits));
       if ~no_tx
          if isequal(rx_bits, tx_bits)
             fprintf('RX data matched TX data\n');

@@ -92,7 +92,8 @@ end
 pnorm_alpha             = 0.95;
 pnorm_min_gain          = 0.1;
 pnorm_max_gain          = 20;
-[iq_signal,est_power,~] = pnorm(iq_signal, 1, pnorm_alpha, pnorm_min_gain, pnorm_max_gain);
+[iq_signal,est_power,~, settle_time] = pnorm(iq_signal, 1, pnorm_alpha, ...
+                                             pnorm_min_gain, pnorm_max_gain);
 info.iq_filt_norm       = iq_signal;
 
 %Correlate input IQ signal with known preamble waveform
@@ -109,7 +110,7 @@ info.preamble_corr    = corr;
 [peak, peak_idx] = max(abs(corr).^2);
 %Stop if peak does not exceed threshold (no preamble match)
 if peak < corr_peak_thresh
-   fprintf(2, 'fsk_receive(): No preamble match in signal\n');
+   fprintf(2, '%s: No preamble match in signal\n', mfilename);
    bits = -1;
    return;
 end
@@ -121,15 +122,24 @@ sig_start_idx      = (sig_start_idx-1) * decimation_factor + 1;
 info.sig_start_idx = sig_start_idx;
 
 %Estimate SNR using the power estimate in the middle of the frame (signal+noise, S+N) and
-%the power estimate just before the frame (noise, N). S = (S+N) - N.
+%the power estimate just after the frame has ended (noise, N). S = (S+N) - N.
 
 %(S+N) power: Use est_power at frame data start. At this point, the training sequence and
 %and preamble have come through, so est_power has had time to stabilize.
 signoise_pwr_est = est_power(sig_start_idx);
-%N power: Use est_power before the ramp up to the training sequence
-training_len     = 4;
-noise_pwr_est    = est_power(sig_start_idx - length(preamble_waveform) - ...
-                             training_len*8*samps_per_symb - samps_per_symb);
+%N power: Use est_power after end of frame
+%frame end index: after all bytes, plus after ramp down
+frame_end_idx    = sig_start_idx + num_bytes*8*samps_per_symb + samps_per_symb;
+%est_power noise index: add time for IIR filter to settle
+noise_est_idx    = frame_end_idx + settle_time;
+if noise_est_idx > length(est_power)
+   fprintf(2, ['%s: Not enough samples to allow time for noise power estimate to ' ...
+               'fully settle. SNR estimate may not be accurate. Add more 0 samples to' ...
+               ' end of signal to fix.\n'], mfilename);
+   noise_est_idx = length(est_power);
+end
+
+noise_pwr_est    = est_power(noise_est_idx);
 sig_pwr_est      = signoise_pwr_est - noise_pwr_est;
 snr_est          = 10*log10(sig_pwr_est / noise_pwr_est);
 fprintf('Note: RX post-filter SNR estimate = %.2f dB\n', snr_est);
