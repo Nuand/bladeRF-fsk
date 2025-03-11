@@ -142,7 +142,7 @@ end
 noise_est_pwr    = est_power(noise_est_idx);
 sig_est_pwr      = signoise_est_pwr - noise_est_pwr;
 snr_est_db       = 10*log10(sig_est_pwr / noise_est_pwr);
-fprintf('Note: RX post-filter SNR estimate = %.2f dB\n', snr_est);
+fprintf('Note: RX post-filter SNR estimate = %.2f dB\n', snr_est_db);
 
 %Demodulate bits from the IQ signal at the start index
 [bits, info.dphase, info.dphase_sym] = ...
