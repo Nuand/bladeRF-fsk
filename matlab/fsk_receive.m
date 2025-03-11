@@ -126,7 +126,7 @@ info.sig_start_idx = sig_start_idx;
 
 %(S+N) power: Use est_power at frame data start. At this point, the training sequence and
 %and preamble have come through, so est_power has had time to stabilize.
-signoise_pwr_est = est_power(sig_start_idx);
+signoise_est_pwr = est_power(sig_start_idx);
 %N power: Use est_power after end of frame
 %frame end index: after all bytes, plus after ramp down
 frame_end_idx    = sig_start_idx + num_bytes*8*samps_per_symb + samps_per_symb;
@@ -139,9 +139,9 @@ if noise_est_idx > length(est_power)
    noise_est_idx = length(est_power);
 end
 
-noise_pwr_est    = est_power(noise_est_idx);
-sig_pwr_est      = signoise_pwr_est - noise_pwr_est;
-snr_est          = 10*log10(sig_pwr_est / noise_pwr_est);
+noise_est_pwr    = est_power(noise_est_idx);
+sig_est_pwr      = signoise_est_pwr - noise_est_pwr;
+snr_est_db       = 10*log10(sig_est_pwr / noise_est_pwr);
 fprintf('Note: RX post-filter SNR estimate = %.2f dB\n', snr_est);
 
 %Demodulate bits from the IQ signal at the start index

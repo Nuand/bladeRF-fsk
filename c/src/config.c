@@ -214,10 +214,10 @@ static struct config *alloc_config_with_defaults()
     config->params.rx_lna_gain     = RX_LNA_DEFAULT;
     config->params.rx_vga1_gain    = RX_VGA1_DEFAULT;
     config->params.rx_vga2_gain    = RX_VGA2_DEFAULT;
-    config->params.rx_agc          = 1;
-    config->params.rx_use_unified  = 1;
+    config->params.rx_agc          = true;
+    config->params.rx_use_unified  = true;
     config->params.rx_unified_gain = RX_GAIN_DEFAULT;
-    config->params.rx_biastee      = 0;
+    config->params.rx_biastee      = false;
 
     /* TX defaults */
     config->tx_input               = NULL;
@@ -225,9 +225,9 @@ static struct config *alloc_config_with_defaults()
     config->params.tx_chan         = CHAN_DEFAULT;
     config->params.tx_vga1_gain    = TX_VGA1_DEFAULT;
     config->params.tx_vga2_gain    = TX_VGA2_DEFAULT;
-    config->params.tx_use_unified  = 1;
+    config->params.tx_use_unified  = true;
     config->params.tx_unified_gain = TX_GAIN_DEFAULT;
-    config->params.tx_biastee      = 0;
+    config->params.tx_biastee      = false;
 
     config->payload_length         = PAYLOAD_LEN_DEFAULT;
 

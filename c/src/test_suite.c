@@ -91,19 +91,19 @@ int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_
     params.tx_chan         = 0;
     params.tx_vga1_gain    = -4;
     params.tx_vga2_gain    = 0;
-    params.tx_use_unified  = 1;
+    params.tx_use_unified  = true;
     params.tx_unified_gain = tx_gain;
-    params.tx_biastee      = 0;
+    params.tx_biastee      = false;
 
     params.rx_freq         = tx_freq2;
     params.rx_chan         = 0;
     params.rx_lna_gain     = BLADERF_LNA_GAIN_MAX;
     params.rx_vga1_gain    = 23;
     params.rx_vga2_gain    = 0;
-    params.rx_use_unified  = 1;
+    params.rx_use_unified  = true;
     params.rx_unified_gain = rx_gain;
-    params.rx_biastee      = 0;
-    params.rx_agc          = 0;
+    params.rx_biastee      = false;
+    params.rx_agc          = false;
 
     link1 = link_init(dev1, &params, PAYLOAD_LENGTH);
     if (link1 == NULL){
@@ -240,19 +240,19 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
     params.tx_chan         = 0;
     params.tx_vga1_gain    = -4;
     params.tx_vga2_gain    = 0;
-    params.tx_use_unified  = 1;
+    params.tx_use_unified  = true;
     params.tx_unified_gain = tx_gain;
-    params.tx_biastee      = 0;
+    params.tx_biastee      = false;
 
     params.rx_freq         = tx_freq2;
     params.rx_chan         = 0;
     params.rx_lna_gain     = BLADERF_LNA_GAIN_MAX;
     params.rx_vga1_gain    = 23;
     params.rx_vga2_gain    = 0;
-    params.rx_use_unified  = 1;
+    params.rx_use_unified  = true;
     params.rx_unified_gain = rx_gain;
-    params.rx_biastee      = 0;
-    params.rx_agc          = 0;
+    params.rx_biastee      = false;
+    params.rx_agc          = false;
 
     phy1 = phy_init(dev1, &params, DATA_FRAME_LENGTH);
     if (phy1 == NULL){
@@ -421,19 +421,19 @@ int phy_receive_test(char *dev_id)
     params.tx_chan         = 0;
     params.tx_vga1_gain    = -4;
     params.tx_vga2_gain    = 0;
-    params.tx_use_unified  = 1;
+    params.tx_use_unified  = true;
     params.tx_unified_gain = 0;
-    params.tx_biastee      = 0;
+    params.tx_biastee      = false;
 
     params.rx_freq         = 924000000;
     params.rx_chan         = 0;
     params.rx_lna_gain     = BLADERF_LNA_GAIN_MAX;
     params.rx_vga1_gain    = 23;
     params.rx_vga2_gain    = 0;
-    params.rx_use_unified  = 1;
+    params.rx_use_unified  = true;
     params.rx_unified_gain = 30;
-    params.rx_biastee      = 0;
-    params.rx_agc          = 0;
+    params.rx_biastee      = false;
+    params.rx_agc          = false;
 
     phy = phy_init(dev, &params, DATA_FRAME_LENGTH);
     if (phy == NULL){

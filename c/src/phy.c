@@ -864,7 +864,7 @@ void *phy_receive_frames(void *arg)
     //number of samples for power estimate to settle 99.9% of the way after the input
     //power changes
     pnorm_settle_time = (int) ceil( log2(1 - .999f) / log2(PNORM_ALPHA) );
-    DEBUG_MSG("pnorm settle time = %d\n", pnorm_settle_time);
+    DEBUG_MSG("RX: Pnorm settle time = %d samples\n", pnorm_settle_time);
 
     preamble_detected = false;
     data_index        = 0;
@@ -939,16 +939,10 @@ void *phy_receive_frames(void *arg)
                 }
 
                 if (waiting_on_snr_est){
-                    //Waiting for more samples to collect stable noise power estimate
-                    //after previous frame ended
-                    if (noise_est_pwr_idx >= num_samples_rx_act){
-                        //need to receive more samples before we can get our noise estimate
-                        noise_est_pwr_idx -= num_samples_rx_act;
-                        state = next_state;
-                    }else{
-                        //Hop sideways to estimate SNR before going to next state
-                        state = ESTIMATE_SNR;
-                    }
+                    //We were waiting for more samples to collect stable noise power
+                    //estimate after previous frame ended. We might have them now.
+                    //Hop sideways to estimate SNR before going to next state
+                    state = ESTIMATE_SNR;
                 }else{
                     state = next_state;
                 }
@@ -965,14 +959,17 @@ void *phy_receive_frames(void *arg)
                     DEBUG_MSG("RX: Preamble matched @ index %lu\n", samples_index);
                     preamble_detected  = true;
                     new_frame          = true;
-                    //store the current power estimate (at start of data) as S+N power
-                    //at this point the power estimate has settled from training+preamble
-                    signoise_est_pwr   = phy->rx->est_power[samples_index];
+
+                    //SNR estimator bookkeeping
                     if (waiting_on_snr_est){
                         NOTE("RX: Detected another frame before we had time to get a "
                              "stable noise power estimate. Skipping previous SNR estimate.");
                         waiting_on_snr_est = false;
                     }
+                    //store the current power estimate (at start of data) as S+N power
+                    //at this point the power estimate has settled from training+preamble
+                    signoise_est_pwr   = phy->rx->est_power[samples_index];
+
                     //First we only demod the first byte to determine frame type
                     num_bytes_to_demod = 1;
                     data_index         = 0;
@@ -1040,7 +1037,42 @@ void *phy_receive_frames(void *arg)
                     //Unscramble the frame
                     unscramble_frame(rx_buffer, frame_length, phy->scrambling_sequence);
                 #endif
-                state = COPY;
+                next_state = COPY;
+
+                //Done processing frame. Prepare SNR estimate before going to next state
+                state = ESTIMATE_SNR;
+                break;
+            case ESTIMATE_SNR:
+                //--Estimate SNR (if we have the noise sample) then go back to what we
+                //--were doing before
+                //signoise_est_pwr has been previously stored away at the beginning of the
+                //frame
+                if (!waiting_on_snr_est){
+                    //Prepare new SNR estimate after frame ended
+                    //samples_index is now at the end of frame just before ramp down.
+                    //post-frame samples index to use for noise estimate:
+                    noise_est_pwr_idx  = samples_index + RAMP_LENGTH + pnorm_settle_time;
+                }
+
+                if (noise_est_pwr_idx >= num_samples_rx_act){
+                    //need to receive more samples before we can obtain our noise estimate
+                    noise_est_pwr_idx -= num_samples_rx_act;
+                    waiting_on_snr_est = true;
+                }else{
+                    //Have everything needed; compute SNR estimate
+                    noise_est_pwr      = phy->rx->est_power[noise_est_pwr_idx];
+                    sig_est_pwr        = signoise_est_pwr - noise_est_pwr;
+                    snr_est_db         = 10*log10(sig_est_pwr/noise_est_pwr);
+                    waiting_on_snr_est = false;
+                    DEBUG_MSG("noise_est_pwr_idx = %d\n", noise_est_pwr_idx);
+                    DEBUG_MSG("signoise_est_pwr  = %f\n", signoise_est_pwr);
+                    DEBUG_MSG("noise_est_pwr     = %f\n", noise_est_pwr);
+                    DEBUG_MSG("sig_est_pwr       = %f\n", sig_est_pwr);
+                    DEBUG_MSG("snr_est_db        = %f\n", snr_est_db);
+                    NOTE("RX: Post-filter SNR estimate = %.1f dB\n", snr_est_db);
+                }
+
+                state = next_state;     //Go to previously stored next state
                 break;
             case COPY:
                 //--Copy frame into buffer which can be accessed by the link layer
@@ -1074,33 +1106,10 @@ void *phy_receive_frames(void *arg)
                 preamble_detected = false;
 
                 if (samples_index == num_samples_rx_act){
-                    next_state = RECEIVE;
+                    state = RECEIVE;
                 }else{
-                    next_state = PREAMBLE_CORRELATE;
+                    state = PREAMBLE_CORRELATE;
                 }
-
-                //Done with frame. Prepare SNR estimate before going to next state
-                //post-frame samples index to use for noise estimate:
-                noise_est_pwr_idx = samples_index + RAMP_LENGTH + pnorm_settle_time;
-                if (noise_est_pwr_idx >= num_samples_rx_act){
-                    //need to receive more samples before we can get our noise estimate
-                    noise_est_pwr_idx -= num_samples_rx_act;
-                    waiting_on_snr_est = true;
-                    state              = next_state;
-                }else{
-                    state = ESTIMATE_SNR;
-                }
-                break;
-            case ESTIMATE_SNR:
-                //--Estimate SNR then go back to what we were doing before
-                //signoise_est_pwr has been previously stored away
-                noise_est_pwr      = phy->rx->est_power[noise_est_pwr_idx];
-                sig_est_pwr        = signoise_est_pwr - noise_est_pwr;
-                snr_est_db         = 10*log10(sig_est_pwr/noise_est_pwr);
-                waiting_on_snr_est = false;
-                NOTE("RX post-filter SNR estimate = %.2f dB\n", snr_est_db);
-
-                state = next_state;     //Go to previously stored next state
                 break;
             default:
                 ERROR("%s: Invalid state\n", __FUNCTION__);
