@@ -148,7 +148,7 @@ void *receiver(void *arg)
 
     while(!handle->rx.stop){
         //Receive data into buffer
-        bytes_received = link_receive_data(handle->link, sizeof(rx_data), 1, rx_data);
+        bytes_received = link_receive_data(handle->link, rx_data_size, 1, rx_data);
         if (bytes_received == 0){
             continue;
         }else if (bytes_received < 0){
