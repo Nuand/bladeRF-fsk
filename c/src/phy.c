@@ -66,6 +66,7 @@ struct rx {
     struct correlator *corr;                //Correlator
     struct complex_sample *filt_samples;    //Filtered input samples
     struct complex_sample *pnorm_samples;   //power normalized samples
+    float *est_power;                       //power estimate samples vector (from pnorm)
     uint8_t *data_buf;          //received data output buffer (no training seq/preamble)
     bool buf_filled;            //is the rx data buffer filled
     bool stop;                  //control variable to stop the receiver
@@ -258,6 +259,13 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params,
         goto error;
     }
 
+    //Allocate memory for power estimate vector
+    phy->rx->est_power = malloc(NUM_SAMPLES_RX * sizeof(phy->rx->est_power[0]));
+    if (phy->rx->est_power == NULL){
+        perror("[PHY] malloc");
+        goto error;
+    }
+
     // Create RX Channel Filter
     phy->rx->ch_filt = fir_init(rx_ch_filter, rx_ch_filter_len);
     if (phy->rx->ch_filt == NULL) {
@@ -266,7 +274,7 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params,
     }
 
     // Create power normalizer
-    phy->rx->pnorm = pnorm_init(0.95f, 0.1f, 20.0f);
+    phy->rx->pnorm = pnorm_init(PNORM_ALPHA, 0.1f, 20.0f);
     if (phy->rx->pnorm == NULL){
         ERROR("%s: Couldn't initialize power normalizer\n", __FUNCTION__);
         goto error;
@@ -385,6 +393,7 @@ void phy_close(struct phy_handle *phy)
             free(phy->rx->in_samples);
             free(phy->rx->filt_samples);
             free(phy->rx->pnorm_samples);
+            free(phy->rx->est_power);
             status = pthread_mutex_destroy(&(phy->rx->buf_status_lock));
             if (status != 0){
                 ERROR("%s: Error destroying pthread_mutex\n", __FUNCTION__);
@@ -827,9 +836,16 @@ void *phy_receive_frames(void *arg)
     #ifdef LOG_RX_SAMPLES
         size_t nwritten;
     #endif
+    float        signoise_est_pwr, noise_est_pwr, sig_est_pwr;
+    float        snr_est_db;
+    int          pnorm_settle_time;
+    unsigned int noise_est_pwr_idx  = 0;
+    bool         waiting_on_snr_est = false;
 
-    enum states {RECEIVE, PREAMBLE_CORRELATE, DEMOD, CHECK_FRAME_TYPE, DECODE, COPY};
-    enum states state;                //current state variable
+    enum states {RECEIVE, PREAMBLE_CORRELATE, DEMOD, CHECK_FRAME_TYPE, DECODE, COPY,
+                 ESTIMATE_SNR};
+    enum states state;          //current state variable
+    enum states next_state;     //stored next state, only needed for ESTIMATE_SNR
 
     //corr_process() takes a size_t count. Ensure a cast from uint64_t to size_t is valid
     assert(NUM_SAMPLES_RX < SIZE_MAX);
@@ -845,9 +861,14 @@ void *phy_receive_frames(void *arg)
     memset(&metadata, 0, sizeof(metadata));
     metadata.flags = BLADERF_META_FLAG_RX_NOW;
 
+    //number of samples for power estimate to settle 99.9% of the way after the input
+    //power changes
+    pnorm_settle_time = (int) ceil( log2(1 - .999f) / log2(PNORM_ALPHA) );
+    DEBUG_MSG("pnorm settle time = %d\n", pnorm_settle_time);
+
     preamble_detected = false;
-    data_index = 0;
-    state = RECEIVE;
+    data_index        = 0;
+    state             = RECEIVE;
     //Loop until stop signal detected
     while(!phy->rx->stop){
         switch(state){
@@ -888,7 +909,7 @@ void *phy_receive_frames(void *arg)
                 //Power normalize
                 #ifndef BYPASS_RX_PNORM
                     pnorm(phy->rx->pnorm, num_samples_rx_act, phy->rx->filt_samples,
-                          phy->rx->pnorm_samples, NULL, NULL);
+                          phy->rx->pnorm_samples, phy->rx->est_power, NULL);
                 #else
                     memcpy(phy->rx->pnorm_samples, phy->rx->filt_samples,
                            num_samples_rx_act * sizeof(struct complex_sample));
@@ -912,9 +933,24 @@ void *phy_receive_frames(void *arg)
                 #endif
 
                 if (preamble_detected){
-                    state = DEMOD;
+                    next_state = DEMOD;
                 }else{
-                    state = PREAMBLE_CORRELATE;
+                    next_state = PREAMBLE_CORRELATE;
+                }
+
+                if (waiting_on_snr_est){
+                    //Waiting for more samples to collect stable noise power estimate
+                    //after previous frame ended
+                    if (noise_est_pwr_idx >= num_samples_rx_act){
+                        //need to receive more samples before we can get our noise estimate
+                        noise_est_pwr_idx -= num_samples_rx_act;
+                        state = next_state;
+                    }else{
+                        //Hop sideways to estimate SNR before going to next state
+                        state = ESTIMATE_SNR;
+                    }
+                }else{
+                    state = next_state;
                 }
                 break;
             case PREAMBLE_CORRELATE:
@@ -929,6 +965,14 @@ void *phy_receive_frames(void *arg)
                     DEBUG_MSG("RX: Preamble matched @ index %lu\n", samples_index);
                     preamble_detected  = true;
                     new_frame          = true;
+                    //store the current power estimate (at start of data) as S+N power
+                    //at this point the power estimate has settled from training+preamble
+                    signoise_est_pwr   = phy->rx->est_power[samples_index];
+                    if (waiting_on_snr_est){
+                        NOTE("RX: Detected another frame before we had time to get a "
+                             "stable noise power estimate. Skipping previous SNR estimate.");
+                        waiting_on_snr_est = false;
+                    }
                     //First we only demod the first byte to determine frame type
                     num_bytes_to_demod = 1;
                     data_index         = 0;
@@ -1030,10 +1074,33 @@ void *phy_receive_frames(void *arg)
                 preamble_detected = false;
 
                 if (samples_index == num_samples_rx_act){
-                    state = RECEIVE;
+                    next_state = RECEIVE;
                 }else{
-                    state = PREAMBLE_CORRELATE;
+                    next_state = PREAMBLE_CORRELATE;
                 }
+
+                //Done with frame. Prepare SNR estimate before going to next state
+                //post-frame samples index to use for noise estimate:
+                noise_est_pwr_idx = samples_index + RAMP_LENGTH + pnorm_settle_time;
+                if (noise_est_pwr_idx >= num_samples_rx_act){
+                    //need to receive more samples before we can get our noise estimate
+                    noise_est_pwr_idx -= num_samples_rx_act;
+                    waiting_on_snr_est = true;
+                    state              = next_state;
+                }else{
+                    state = ESTIMATE_SNR;
+                }
+                break;
+            case ESTIMATE_SNR:
+                //--Estimate SNR then go back to what we were doing before
+                //signoise_est_pwr has been previously stored away
+                noise_est_pwr      = phy->rx->est_power[noise_est_pwr_idx];
+                sig_est_pwr        = signoise_est_pwr - noise_est_pwr;
+                snr_est_db         = 10*log10(sig_est_pwr/noise_est_pwr);
+                waiting_on_snr_est = false;
+                NOTE("RX post-filter SNR estimate = %.2f dB\n", snr_est_db);
+
+                state = next_state;     //Go to previously stored next state
                 break;
             default:
                 ERROR("%s: Invalid state\n", __FUNCTION__);

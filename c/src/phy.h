@@ -71,6 +71,8 @@
 #define NUM_SAMPLES_RX SYNC_BUFFER_SIZE
 //Correlator countdown size
 #define CORR_COUNTDOWN SAMP_PER_SYMB
+//power normalization alpha coefficient - how slowly it responds to changes in power
+#define PNORM_ALPHA 0.95f
 
 //DEBUG: Define this to write all RX samples out to binary file
 // #define LOG_RX_SAMPLES
