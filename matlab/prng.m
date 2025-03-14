@@ -20,7 +20,7 @@ for word=0:ceil(len/8)-1   %for each 8-byte word
    %output the 8 bytes from state
    for b=0:7
       bytes_out(i) = bitand( bitshift(state, -b*8), hex2dec('FF') );
-      i++;
+      i = i + 1;
       if i > len
          break;
       end

@@ -20,7 +20,7 @@
 
 function [bits, info] = fsk_receive(preamble_waveform, iq_signal, ...
                                     decimation_factor, samps_per_symb, ...
-                                    h, num_bytes, scrambling_seed)
+                                    h, num_bytes, scrambling_seed, is_real_sig)
 % FSK_RECEIVE Demodulate/receive data bits from an FSK baseband IQ signal.
 % Correlates the iq_signal with the given preamble waveform to find the
 % start of the data signal
@@ -44,6 +44,10 @@ function [bits, info] = fsk_receive(preamble_waveform, iq_signal, ...
 %    SCRAMBLING_SEED the unsigned 64 bit seed used to create descrambling sequence. Must
 %    match scrambling seed on the TX side for proper descrambling. Leave empty [] to
 %    bypass descrambling.
+%
+%    IS_REAL_SIG Set to 1 if the signal is sampled over the air using a bladeRF, for more
+%    accurate SNR estimation which adds additional settling time to the post-frame noise
+%    estimate to account for extra delay from DC offset IIR filters
 %
 %    BITS is an Nx8 matrix of received bits. Each bit element in
 %    the matrix is a char which can either be '1' or '0'. Each row of the
@@ -134,7 +138,10 @@ signoise_est_pwr = est_power(sig_start_idx);
 %frame end index: after all bytes and ramp down. +1 for setting init phase
 frame_end_idx    = sig_start_idx + 1 + num_bytes*8*samps_per_symb + samps_per_symb;
 %est_power noise index: add time for DC offset and pnorm IIR filters to settle
-noise_est_idx    = frame_end_idx + dc_off_settle_time + pnorm_settle_time;
+noise_est_idx    = frame_end_idx + pnorm_settle_time;
+if is_real_sig
+   noise_est_idx = noise_est_idx + dc_off_settle_time;
+end
 if noise_est_idx > length(est_power)
    fprintf(2, ['%s: Not enough samples to allow time for noise power estimate to ' ...
                'fully settle. SNR estimate may not be accurate. Add more 0 samples to' ...

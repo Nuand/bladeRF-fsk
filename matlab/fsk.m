@@ -225,7 +225,7 @@ if ~no_rx
       rx_nbytes = size(tx_bits, 1);
    end
    [rx_bits, rx_info] = fsk_receive(preamble_waveform, rx_sig, dec_factor, ...
-                                    samps_per_symb, h, rx_nbytes, scrambling_seed);
+                                    samps_per_symb, h, rx_nbytes, scrambling_seed, use_file);
 
    rx_nsym = numel(training_seq) + numel(preamble) + rx_nbytes*8;
 
