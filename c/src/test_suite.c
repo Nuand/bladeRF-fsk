@@ -49,15 +49,15 @@ int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_
 {
     struct link_handle *link1 = NULL;
     struct link_handle *link2 = NULL;
-    int status = 0;
-    int bytes_received;
-    uint8_t tx_data[PAYLOAD_LENGTH];
-    uint8_t tx_data2[PAYLOAD_LENGTH] = "Another message";
-    uint8_t rx_data[PAYLOAD_LENGTH];
+    int                 status = 0;
+    int                 bytes_received;
+    uint8_t             tx_data[PAYLOAD_LENGTH];
+    uint8_t             tx_data2[PAYLOAD_LENGTH] = "Another message";
+    uint8_t             rx_data[PAYLOAD_LENGTH];
     struct radio_params params;
-    struct bladerf *dev1 = NULL, *dev2 = NULL;
-    char *result;
-    bool passed = 1;
+    struct bladerf     *dev1 = NULL, *dev2 = NULL;
+    char               *result;
+    bool                passed = 1;
 
     printf("------------BEGINNING LINK TEST-----------\n");
     //Open bladeRFs
@@ -112,8 +112,8 @@ int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_
         goto out;
     }
     //Init link2
-    params.tx_freq         = tx_freq2;
-    params.rx_freq         = tx_freq1;
+    params.tx_freq = tx_freq2;
+    params.rx_freq = tx_freq1;
     link2 = link_init(dev2, &params, PAYLOAD_LENGTH);
     if (link2 == NULL){
         fprintf(stderr, "Couldn't initialize link2\n");
@@ -200,18 +200,18 @@ int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_
 int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_frequency tx_freq2,
              bladerf_gain tx_gain, bladerf_gain rx_gain)
 {
-    struct phy_handle *phy1 = NULL;
-    struct phy_handle *phy2 = NULL;
-    uint8_t tx_data[DATA_FRAME_LENGTH];
-    uint8_t *tx_data2 = NULL;
-    uint8_t *rx_data;
-    uint64_t prng_seed = 29398283513841632;
-    int status = 0, ret;
-    bool rx_on = false, tx_on = false;
+    struct phy_handle  *phy1 = NULL;
+    struct phy_handle  *phy2 = NULL;
+    uint8_t             tx_data[DATA_FRAME_LENGTH];
+    uint8_t            *tx_data2 = NULL;
+    uint8_t            *rx_data;
+    uint64_t            prng_seed = 29398283513841632;
+    int                 status = 0, ret;
+    bool                rx_on = false, tx_on = false;
     struct radio_params params;
-    struct bladerf *dev1 = NULL, *dev2 = NULL;
-    char *result;
-    bool passed = 1;
+    struct bladerf     *dev1 = NULL, *dev2 = NULL;
+    char               *result;
+    bool                passed = 1;
 
     printf("------------BEGINNING PHY TEST------------\n");
     //phy1 -> phy2
@@ -267,8 +267,8 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
         fprintf(stderr, "Couldn't open bladeRF device #2: %s\n", bladerf_strerror(status));
         goto out;
     }
-    params.tx_freq         = tx_freq2;
-    params.rx_freq         = tx_freq1;
+    params.tx_freq = tx_freq2;
+    params.rx_freq = tx_freq1;
     phy2 = phy_init(dev2, &params, DATA_FRAME_LENGTH);
     if (phy2 == NULL){
         fprintf(stderr, "Couldn't initialize phy2\n");
@@ -392,12 +392,12 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
  */
 int phy_receive_test(char *dev_id)
 {
-    struct phy_handle *phy = NULL;
-    uint8_t *rx_data;
-    int status = 0, ret;
-    bool rx_on = false;
+    struct phy_handle  *phy = NULL;
+    uint8_t            *rx_data;
+    int                 status = 0, ret;
+    bool                rx_on = false;
     struct radio_params params;
-    struct bladerf *dev = NULL;
+    struct bladerf     *dev = NULL;
 
     printf("------------BEGINNING PHY RECEIVER TEST------------\n");
     //Init phy
@@ -495,16 +495,17 @@ int fsk_test1(void)
 {
     //tx
     struct complex_sample *tx_samples = NULL;
-    uint8_t tx_data[] = "=Hello-there=";
-    unsigned int num_samples_tx;
+    uint8_t                tx_data[] = "=Hello-there=";
+    unsigned int           num_samples_tx;
     //rx
-    unsigned int num_bytes_rx1, num_bytes_rx2;
-    struct fsk_handle *fsk = NULL;
-    unsigned int num_samples_rx1;
-    unsigned int num_samples_rx2;
-    int status = 0;
-    uint8_t rx_data[512];
-    bool passed = 1;
+    unsigned int           num_bytes_rx1, num_bytes_rx2;
+    struct fsk_handle     *fsk = NULL;
+    unsigned int           num_samples_rx1;
+    unsigned int           num_samples_rx2;
+    int                    status = 0;
+    uint8_t                rx_data[512];
+    bool                   passed = 1;
+    int                    num_samples_processed;
 
     printf("------------BEGINNING FSK TEST 1-------------\n");
     //Open fsk handle
@@ -539,15 +540,19 @@ int fsk_test1(void)
     printf("2nd demod will receive %u samples\n", num_samples_rx2);
 
     //Demod part 1
-    num_bytes_rx1 = fsk_demod(fsk, tx_samples, num_samples_rx1, true, -1, rx_data);
+    num_bytes_rx1 = fsk_demod(fsk, tx_samples, num_samples_rx1, true, -1, rx_data,
+                              &num_samples_processed);
     printf("Demodulated %u bytes\n", num_bytes_rx1);
     print_chars(rx_data, num_bytes_rx1);
+    printf("   Num samples processed = %d\n", num_samples_processed);
 
     //Demod part 2
     num_bytes_rx2 = fsk_demod(fsk, &tx_samples[num_samples_rx1], num_samples_rx2, false,
-                                sizeof(tx_data)-num_bytes_rx1, &rx_data[num_bytes_rx1]);
+                              sizeof(tx_data)-num_bytes_rx1, &rx_data[num_bytes_rx1],
+                              &num_samples_processed);
     printf("Demodulated %u bytes\n", num_bytes_rx2);
     print_chars(&rx_data[num_bytes_rx1], num_bytes_rx2);
+    printf("   Num samples processed = %d\n", num_samples_processed);
 
     printf("Received %u bytes total: ", num_bytes_rx1+num_bytes_rx2);
     print_chars(rx_data, num_bytes_rx1+num_bytes_rx2);
@@ -579,12 +584,12 @@ int fsk_test1(void)
  */
 int main(int argc, char *argv[])
 {
-    char *dev_id1;
-    char *dev_id2;
+    char        *dev_id1;
+    char        *dev_id2;
     bladerf_gain tx_gain;
     bladerf_gain rx_gain;
-    int status;
-    bool passed = 1;
+    int          status;
+    bool         passed = 1;
 
     //Parse arguments
     if (argc < 5){

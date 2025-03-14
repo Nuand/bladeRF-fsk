@@ -35,18 +35,18 @@
 //internal structs
 struct fsk_handle {
     struct complex_sample *sample_table;
-    int points_per_rev;
-    int samp_per_symb;
+    int                    points_per_rev;
+    int                    samp_per_symb;
     //These variables keep track of the demodulator's state when a call to fsk_demod()
     //did not fully demodulate the last byte, meaning it needs to be called again with
     //more samples to finish demodulating that last byte
-    bool last_byte_demod_complete;  //False if the last byte was partially demodulated
-                                    //in a call to fsk_demod()
-    uint8_t last_byte;
-    double last_phase;
-    double curr_dphase_tot;
-    int curr_samp_index;            //Current samples index (0 - SAMP_PER_SYMB-1)
-    int curr_bit_index;
+    bool                   last_byte_demod_complete;  //False if the last byte was partially 
+                                                      //demodulated in a call to fsk_demod()
+    uint8_t                last_byte;
+    double                 last_phase;
+    double                 curr_dphase_tot;
+    int                    curr_samp_index; //Current sample idx in symbol (0 - SAMP_PER_SYMB-1)
+    int                    curr_bit_index;
 };
 
 //internal functions
@@ -108,14 +108,14 @@ static struct complex_sample *fsk_gen_samples_table(int points_per_rev)
 }
 
 unsigned int fsk_mod(struct fsk_handle *fsk, uint8_t *data_buf, int num_bytes,
-                        struct complex_sample *samples)
+                     struct complex_sample *samples)
 {
 
-    int samp_table_pos;        //current position in samples table
-    int byte;                //current byte (0-(num_bytes-1))
+    int samp_table_pos;     //current position in samples table
+    int byte;               //current byte (0-(num_bytes-1))
     int bit;                //current bit (0-7) in byte
-    int samp;                //current sample in symbol period (0-(samps_per_symb-1))
-    int i;                    //index in samples buffer
+    int samp;               //current sample in symbol period (0-(samps_per_symb-1))
+    int i;                  //index in samples buffer
 
     //Set initial position to 0 (1 + 0j)
     samp_table_pos = 0;
@@ -194,21 +194,22 @@ static double angle(int i, int q)
 }
 
 unsigned int fsk_demod(struct fsk_handle *fsk, struct complex_sample *samples,
-                    int num_samples, bool new_signal, int num_bytes, uint8_t *data_buf)
+                       int num_samples, bool new_signal, int num_bytes, uint8_t *data_buf,
+                       int *num_samples_processed)
 {
-    int i;        //Current samples index (0 to num_samples-1)
-    int byte = 0;
-    int bit;
-    int samp;
+    int    i;        //Current samples index (0 to num_samples-1)
+    int    byte = 0;
+    int    bit;
+    int    samp;
     double phase, phase_prev, dphase_tot;
 
     i = 0;
-    if (new_signal){
+    if (new_signal && num_samples > 0){
         //Reset everything, calculate initial phase
         fsk->curr_samp_index = 0;
         fsk->curr_dphase_tot = 0;
-        fsk->curr_bit_index = 0;
-        fsk->last_phase = angle(samples[0].i, samples[0].q);
+        fsk->curr_bit_index  = 0;
+        fsk->last_phase      = angle(samples[0].i, samples[0].q);
         i++;
     }
     phase = fsk->last_phase;
@@ -225,24 +226,23 @@ unsigned int fsk_demod(struct fsk_handle *fsk, struct complex_sample *samples,
             //Stop if we reach the end of the samples buffer
             dphase_tot = fsk->curr_dphase_tot;
             for (samp = fsk->curr_samp_index; (samp < fsk->samp_per_symb) && i < num_samples;
-                    samp++){
+                 samp++, i++){
                 phase_prev = phase;
-                phase = angle(samples[i].i, samples[i].q);
+                phase      = angle(samples[i].i, samples[i].q);
                 //Unwrap angle
                 angle_unwrap(phase_prev, &phase);
                 //Add this angle change to the total angle change
                 dphase_tot += phase - phase_prev;
-                i++;
             }
             //Check to see if we broke out of the loop before demodulating the full bit
             if (samp != fsk->samp_per_symb){
                 //Set demod state information
                 fsk->last_byte_demod_complete = false;
-                fsk->last_byte = data_buf[byte];
-                fsk->last_phase = phase;
-                fsk->curr_dphase_tot = dphase_tot;
-                fsk->curr_samp_index = samp;
-                fsk->curr_bit_index = bit;
+                fsk->last_byte                = data_buf[byte];
+                fsk->last_phase               = phase;
+                fsk->curr_dphase_tot          = dphase_tot;
+                fsk->curr_samp_index          = samp;
+                fsk->curr_bit_index           = bit;
                 goto out;
             }
             if (dphase_tot > 0){
@@ -256,12 +256,13 @@ unsigned int fsk_demod(struct fsk_handle *fsk, struct complex_sample *samples,
             fsk->curr_samp_index = 0;
             fsk->curr_dphase_tot = 0;
         }
-        fsk->last_phase = phase;
-        fsk->curr_bit_index = 0;
+        fsk->last_phase               = phase;
+        fsk->curr_bit_index           = 0;
         fsk->last_byte_demod_complete = true;
     }
 
     out:
+        *num_samples_processed = i;
         return byte;
 }
 
@@ -276,7 +277,7 @@ struct fsk_handle *fsk_init(void)
         return NULL;
     }
     //Set modulation/demodulation parameters
-    fsk->samp_per_symb = SAMP_PER_SYMB;
+    fsk->samp_per_symb  = SAMP_PER_SYMB;
     fsk->points_per_rev = POINTS_PER_REV;
     //Generate the samples table
     fsk->sample_table = fsk_gen_samples_table(POINTS_PER_REV);
@@ -287,11 +288,11 @@ struct fsk_handle *fsk_init(void)
     }
     //Initialize demod state variables
     fsk->last_byte_demod_complete = true;
-    fsk->last_byte = 0x00;
-    fsk->curr_dphase_tot = 0;
-    fsk->last_phase = 0;
-    fsk->curr_samp_index = 0;
-    fsk->curr_bit_index = 0;
+    fsk->last_byte                = 0x00;
+    fsk->curr_dphase_tot          = 0;
+    fsk->last_phase               = 0;
+    fsk->curr_samp_index          = 0;
+    fsk->curr_bit_index           = 0;
     return fsk;
 }
 

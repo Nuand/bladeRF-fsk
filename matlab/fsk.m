@@ -43,11 +43,11 @@ use_file       = 0;     %1=Write TX samples to file and read RX samples from fil
                         %0=Simulate internally only
    csv         = 1;     %1=CSV file, 0=binary file
 rand_input     = 0;     %1=use random input TX data, 0=prompt for string entered by user
-   rand_nbytes = 1000;  %number of bytes to transmit if rand_input=1
+   rand_nbytes = 1009;  %number of bytes to transmit if rand_input=1
 
 scrambling     = 1;     %1=do scrambling of data bits, 0=no scrambling
 no_tx          = 0;     %1=Don't simulate TX side (must use file for RX signal)
-   rx_nbytes   = 1000;  %if no_tx=1, number of bytes to demodulate on the RX side
+   rx_nbytes   = 1009;  %if no_tx=1, number of bytes to demodulate on the RX side
 no_rx          = 0;     %1=Don't simulate RX side
 
 Fs             = 2e6;   %Sample rate of 2 Msps (500ns sample period)

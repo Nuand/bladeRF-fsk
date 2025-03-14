@@ -76,7 +76,7 @@ void fsk_close(struct fsk_handle *fsk);
  * @return      number of IQ samples modulated
  */
 unsigned int fsk_mod(struct fsk_handle *fsk, uint8_t *data_buf, int num_bytes,
-                        struct complex_sample *samples);
+                     struct complex_sample *samples);
 
 /**
  * Convert an array of modulated CPFSK IQ samples into an array of bytes.
@@ -86,21 +86,27 @@ unsigned int fsk_mod(struct fsk_handle *fsk, uint8_t *data_buf, int num_bytes,
  * processed from the 4th bit). It saves off its state to the fsk_handle struct, so in 
  * the next call to fsk_demod(), it will resume and finish demodulating that byte.
  *
- * @param[in]   fsk             fsk_handle struct
- * @param[in]   samples         Array of baseband IQ samples to demodulate
- * @param[in]   num_samples     Number of samples in samples array
- * @param[in]   new_signal      Is this a new FSK signal or a continuation of a previous one?
- *                              If true, the first sample will define the initial phase. Otherwise,
- *                              the previous phase (from last call to fsk_demod()) will define the
- *                              initial phase.
- * @param[in]   num_bytes       number of bytes to attempt to demodulate. If -1, the function will
- *                              demod as many bytes as 'num_samples' will allow.
- * @param[out]  data_buf        buffer to place demodulated bytes in
+ * @param[in]   fsk                   fsk_handle struct
+ * @param[in]   samples               Array of baseband IQ samples to demodulate
+ * @param[in]   num_samples           Number of samples in samples array
+ * @param[in]   new_signal            Is this a new FSK signal or a continuation of a
+ *                                    previous one? If true, the first sample will define 
+ *                                    the initial phase. Otherwise, the previous phase 
+ *                                    (from last call to fsk_demod()) will define the
+ *                                    initial phase.
+ * @param[in]   num_bytes             number of bytes to attempt to demodulate. If -1, the
+ *                                    function will demod as many bytes as 'num_samples'
+ *                                    will allow.
+ * @param[out]  data_buf              buffer to place demodulated bytes in
+ * @param[out]  num_samples_processed Pointer to number of samples that were processed.
+ *                                    If we didn't need all the samples to demod num_bytes
+ *                                    bytes, this will be less than num_samples.
  *
- * @return      number of bytes demodulated. This number will be less than the 'num_bytes' parameter
- *              if there weren't enough samples to demod 'num_bytes' bytes
+ * @return      number of bytes demodulated. This number will be less than the 'num_bytes'
+ *              parameter if there weren't enough samples to demod 'num_bytes' bytes
  */
 unsigned int fsk_demod(struct fsk_handle *fsk, struct complex_sample *samples,
-                    int num_samples, bool new_signal, int num_bytes, uint8_t *data_buf);
+                       int num_samples, bool new_signal, int num_bytes, uint8_t *data_buf,
+                       int *num_samples_processed);
 
 #endif

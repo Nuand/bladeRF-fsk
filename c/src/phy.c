@@ -60,46 +60,46 @@
 
 //Internal structs
 struct rx {
-    int16_t *in_samples;                    //Raw input samples from device
-    struct fir_filter *ch_filt;             //Channel filter
-    struct pnorm_state_t *pnorm;            //Power normalizer
-    struct correlator *corr;                //Correlator
+    int16_t               *in_samples;      //Raw input samples from device
+    struct fir_filter     *ch_filt;         //Channel filter
+    struct pnorm_state_t  *pnorm;           //Power normalizer
+    struct correlator     *corr;            //Correlator
     struct complex_sample *filt_samples;    //Filtered input samples
     struct complex_sample *pnorm_samples;   //power normalized samples
-    float *est_power;                       //power estimate samples vector (from pnorm)
-    uint8_t *data_buf;          //received data output buffer (no training seq/preamble)
-    bool buf_filled;            //is the rx data buffer filled
-    bool stop;                  //control variable to stop the receiver
-    pthread_t thread;           //pthread for the receiver
-    pthread_cond_t buf_filled_cond;     //condition variable for buf_filled
-    pthread_mutex_t buf_status_lock;    //mutex variable for accessing buf_filled
-    bool overrun;               //True if receiver experienced RX sample overruns
+    float                 *est_power;       //power estimate samples vector (from pnorm)
+    uint8_t               *data_buf;        //received data output buffer (no training/preamble)
+    bool                   buf_filled;      //is the rx data buffer filled
+    bool                   stop;            //control variable to stop the receiver
+    pthread_t              thread;          //pthread for the receiver
+    pthread_cond_t         buf_filled_cond; //condition variable for buf_filled
+    pthread_mutex_t        buf_status_lock; //mutex variable for accessing buf_filled
+    bool                   overrun;         //True if receiver experienced RX sample overruns
     #ifdef LOG_RX_SAMPLES
-        FILE *samples_file;
+        FILE              *samples_file;
     #endif
 };
 struct tx {
-    uint8_t *data_buf;          //input data to transmit (including training seq/preamble)
-    unsigned int data_length;   //length of data to transmit (not including preamble)
-    bool buf_filled;
-    bool stop;
-    pthread_t thread;
-    pthread_cond_t buf_filled_cond;
-    pthread_mutex_t buf_status_lock;
-    unsigned int max_num_samples;       //Maximum number of tx samples to transmit
-    struct complex_sample *samples;     //output samples to transmit
+    uint8_t               *data_buf;      //input data to transmit (including training/preamble)
+    unsigned int           data_length;   //length of data to transmit (not including preamble)
+    bool                   buf_filled;
+    bool                   stop;
+    pthread_t              thread;
+    pthread_cond_t         buf_filled_cond;
+    pthread_mutex_t        buf_status_lock;
+    unsigned int           max_num_samples; //Maximum number of tx samples to transmit
+    struct complex_sample *samples;         //output samples to transmit
     #ifdef LOG_TX_SAMPLES
-        FILE *samples_file;
+        FILE              *samples_file;
     #endif
 };
 
 struct phy_handle {
-    struct bladerf *dev;            //bladeRF device handle
-    struct fsk_handle *fsk;         //fsk handle
-    struct tx *tx;                  //tx data structure
-    struct rx *rx;                  //rx data structure
-    uint8_t *scrambling_sequence;
-    unsigned int max_frame_size;    //maximum data frame size (not including preamble)
+    struct bladerf    *dev;                 //bladeRF device handle
+    struct fsk_handle *fsk;                 //fsk handle
+    struct tx         *tx;                  //tx data structure
+    struct rx         *rx;                  //rx data structure
+    uint8_t           *scrambling_sequence;
+    unsigned int       max_frame_size;      //maximum data frame size (not including preamble)
 };
 
 //Internal functions
@@ -121,10 +121,10 @@ static void create_ramps(unsigned int ramp_length, struct complex_sample ramp_do
 struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params,
                             unsigned int max_frame_size)
 {
-    int status;
+    int                status;
     struct phy_handle *phy;
-    uint64_t prng_seed;
-    uint8_t preamble[PREAMBLE_LENGTH] = PREAMBLE;
+    uint64_t           prng_seed;
+    uint8_t            preamble[PREAMBLE_LENGTH] = PREAMBLE;
     #if defined(LOG_RX_SAMPLES) || defined(LOG_TX_SAMPLES)
         char filename[15+BLADERF_SERIAL_LENGTH];
         struct bladerf_serial sn;
@@ -194,8 +194,8 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params,
     }
     //Initialize control variables
     phy->tx->data_length = 0;
-    phy->tx->buf_filled = false;
-    phy->tx->stop = false;
+    phy->tx->buf_filled  = false;
+    phy->tx->stop        = false;
     //Initialize pthread condition variable for buf_filled
     status = pthread_cond_init(&(phy->tx->buf_filled_cond), NULL);
     if (status != 0){
@@ -274,7 +274,7 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params,
     }
 
     // Create power normalizer
-    phy->rx->pnorm = pnorm_init(PNORM_ALPHA, 0.1f, 20.0f);
+    phy->rx->pnorm = pnorm_init(PNORM_ALPHA, PNORM_MIN_GAIN, PNORM_MAX_GAIN);
     if (phy->rx->pnorm == NULL){
         ERROR("%s: Couldn't initialize power normalizer\n", __FUNCTION__);
         goto error;
@@ -515,16 +515,16 @@ int phy_fill_tx_buf(struct phy_handle *phy, uint8_t *data_buf, unsigned int leng
  */
 void *phy_transmit_frames(void *arg)
 {
-    int status;
+    int                     status;
     //Cast arg
-    struct phy_handle *phy = (struct phy_handle *) arg;
-    uint8_t preamble[PREAMBLE_LENGTH] = PREAMBLE;
-    uint8_t training_seq[TRAINING_SEQ_LENGTH] = TRAINING_SEQ;
-    int ramp_down_index;
-    int num_mod_samples, num_samples;
-    bool failed = false;
+    struct phy_handle      *phy = (struct phy_handle *) arg;
+    uint8_t                 preamble[PREAMBLE_LENGTH]         = PREAMBLE;
+    uint8_t                 training_seq[TRAINING_SEQ_LENGTH] = TRAINING_SEQ;
+    int                     ramp_down_index;
+    int                     num_mod_samples, num_samples;
+    bool                    failed = false;
     struct bladerf_metadata metadata;
-    int16_t *out_samples_raw = NULL;
+    int16_t                *out_samples_raw = NULL;
     #ifdef LOG_TX_SAMPLES
         size_t nwritten;
     #endif
@@ -626,7 +626,7 @@ void *phy_transmit_frames(void *arg)
 
         //transmit all samples. TX_NOW
         status = bladerf_sync_tx(phy->dev, out_samples_raw, num_samples,
-                                &metadata, 5000);
+                                 &metadata, 5000);
         if (status != 0){
             ERROR("%s: Couldn't transmit samples with bladeRF: %s\n",
                   __FUNCTION__, bladerf_strerror(status));
@@ -642,7 +642,7 @@ out:
 /**
  * Creates a ramp up and ramp down of samples in the following format: Ramp up will use
  * 'ramp_length' samples to ramp up the I samples from 0 to 2048, and set the Q samples to 0.
- * Ramp down will use 'ramp_length' samples to ramp down  the I samples from
+ * Ramp down will use 'ramp_length' samples to ramp down the I samples from
  * ramp_down_init.i to 0, and ramp down the Q samples from ramp_down_init.q to 0.
  *
  * Ex: If ramp_length is 4, ramp_down_i_init is -2048, and ramp_down_q_init is 0,
@@ -652,12 +652,12 @@ out:
  * [-.75+0j  -.5+0j  -.25+0j  0+0j] scaled by 2048
  */
 static void create_ramps(unsigned int ramp_length, struct complex_sample ramp_down_init,
-                    struct complex_sample *ramp_up, struct complex_sample *ramp_down)
+                         struct complex_sample *ramp_up, struct complex_sample *ramp_down)
 {
     unsigned int samp;
-    double ramp_up_step = 2048.0/ramp_length;
-    double ramp_down_step_i;
-    double ramp_down_step_q;
+    double       ramp_up_step = 2048.0/ramp_length;
+    double       ramp_down_step_i;
+    double       ramp_down_step_q;
 
     //Determine ramp down steps
     if (ramp_down_init.i == 0){
@@ -695,7 +695,7 @@ static void create_ramps(unsigned int ramp_length, struct complex_sample ramp_do
     * scrambling sequence array must be at least as large as the frame.
     */
     static void scramble_frame(uint8_t *frame, int frame_length,
-                                uint8_t *scrambling_sequence)
+                               uint8_t *scrambling_sequence)
     {
         int i;
         for (i = 0; i < frame_length; i++){
@@ -751,9 +751,9 @@ int phy_stop_receiver(struct phy_handle *phy)
 
 uint8_t *phy_request_rx_buf(struct phy_handle *phy, unsigned int timeout_ms)
 {
-    int status;
+    int             status;
     struct timespec timeout_abs;
-    bool failed = false;
+    bool            failed = false;
 
     //Create absolute time format timeout
     status = create_timeout_abs(timeout_ms, &timeout_abs);
@@ -815,35 +815,39 @@ void phy_release_rx_buf(struct phy_handle *phy)
  */
 void *phy_receive_frames(void *arg)
 {
-    struct phy_handle *phy = (struct phy_handle *) arg;
-    int status;
-    unsigned int num_bytes_rx;
-    unsigned int data_index;        //Current index of rx_buffer to receive new bytes on
-                                    //doubles as the current received frame length
-    uint64_t samples_index=0;       //Current index of samples buffer to correlate/demod
-                                    //samples from
-    bool preamble_detected;
-    bool new_frame = false;
-    int frame_length = 0;           //link layer frame length
-    uint8_t *rx_buffer = NULL;      //local rx data buffer
-    uint8_t frame_type;
-    struct bladerf_metadata metadata;            //bladerf metadata for sync_rx()
-    unsigned int num_bytes_to_demod = 0;
-    unsigned int num_samples_rx_act = NUM_SAMPLES_RX;   //actual number of samples RX'd
+    struct phy_handle      *phy = (struct phy_handle *) arg;
+    int                     status;
+    unsigned int            num_bytes_rx;
+    unsigned int            data_index; //Current index of rx_buffer to receive new bytes
+                                        //on. doubles as the current received frame length
+    uint64_t                samples_index=0;    //Current index of samples buffer to 
+                                                //correlate/demod samples from
+    bool                    preamble_detected;
+    bool                    new_frame;
+    bool                    checked_frame_type;     //have we checked frame type yet?
+    int                     frame_length = 0;       //link layer frame length
+    uint8_t                *rx_buffer    = NULL;    //local rx data buffer
+    uint8_t                 frame_type;
+    struct bladerf_metadata metadata;               //bladerf metadata for sync_rx()
+    unsigned int            num_bytes_to_demod = 0;
+    unsigned int            num_samples_rx_act = 0; //actual number of samples RX'd
     #ifndef SYNC_NO_METADATA
-        uint64_t timestamp = UINT64_MAX;
+        uint64_t            timestamp = UINT64_MAX;
     #endif
     #ifdef LOG_RX_SAMPLES
-        size_t nwritten;
+        size_t              nwritten;
     #endif
-    float        signoise_est_pwr, noise_est_pwr, sig_est_pwr;
-    float        snr_est_db;
-    int          pnorm_settle_time;
-    unsigned int noise_est_pwr_idx  = 0;
-    bool         waiting_on_snr_est = false;
+    float                   signoise_est_pwr, noise_est_pwr, sig_est_pwr;
+    float                   snr_est_db;
+    int                     pnorm_settle_time;
+    unsigned int            noise_est_pwr_idx  = 0;
+    bool                    waiting_on_snr_est = false;
+    unsigned long           frame_cnt          = 0;
+    unsigned long           all_samples_idx    = 0;
+    int                     num_samples_processed;  //num samps processed by fsk_demod())
 
-    enum states {RECEIVE, PREAMBLE_CORRELATE, DEMOD, CHECK_FRAME_TYPE, DECODE, COPY,
-                 ESTIMATE_SNR};
+    enum states {RECEIVE, PREAMBLE_CORRELATE, DEMOD, CHECK_FRAME_TYPE, DECODE, ESTIMATE_SNR,
+                 COPY};
     enum states state;          //current state variable
     enum states next_state;     //stored next state, only needed for ESTIMATE_SNR
 
@@ -875,24 +879,27 @@ void *phy_receive_frames(void *arg)
             case RECEIVE:
                 //--Receive samples, filter, and power normalize
                 //DEBUG_MSG("RX: State = RECEIVE\n");
-                samples_index = 0;
+                samples_index    = 0;
+                all_samples_idx += num_samples_rx_act;
                 status = bladerf_sync_rx(phy->dev, phy->rx->in_samples, NUM_SAMPLES_RX,
-                                            &metadata, 5000);
+                                         &metadata, 5000);
                 if (status != 0){
-                    ERROR("%s: Couldn't receive samples from bladeRF: %s\n",
+                    ERROR("RX: %s: Couldn't receive samples from bladeRF: %s\n",
                           __FUNCTION__, bladerf_strerror(status));
                     goto out;
                 }
-                #ifndef SYNC_NO_METADATA
+                #ifdef SYNC_NO_METADATA
+                    num_samples_rx_act = NUM_SAMPLES_RX;
+                #else
                     //Check metadata
                     if (metadata.status & BLADERF_META_STATUS_OVERRUN){
-                        NOTE("%s: Got an overrun. Expected count = %u; actual count = %u.\n",
+                        NOTE("RX: %s: Got an overrun. Expected count = %u; actual count = %u.\n",
                              __FUNCTION__, NUM_SAMPLES_RX, metadata.actual_count);
                         phy->rx->overrun = true;
                     }
                     num_samples_rx_act = metadata.actual_count;
                     if (timestamp != UINT64_MAX && metadata.timestamp != timestamp+NUM_SAMPLES_RX){
-                        NOTE("%s: Unexpected timestamp. Expected %lu, got %lu.\n",
+                        NOTE("RX: %s: Unexpected timestamp. Expected %lu, got %lu.\n",
                              __FUNCTION__, timestamp+NUM_SAMPLES_RX, metadata.timestamp);
                     }
                     timestamp = metadata.timestamp;
@@ -952,13 +959,16 @@ void *phy_receive_frames(void *arg)
                 //--of the data frame
                 //DEBUG_MSG("RX: State = PREAMBLE_CORRELATE\n");
                 samples_index = corr_process(phy->rx->corr,
-                                            &(phy->rx->pnorm_samples[samples_index]),
-                                            (size_t) (num_samples_rx_act-samples_index),
-                                            samples_index);
+                                             &(phy->rx->pnorm_samples[samples_index]),
+                                             (size_t) (num_samples_rx_act-samples_index),
+                                             samples_index);
                 if (samples_index != CORRELATOR_NO_RESULT){
-                    DEBUG_MSG("RX: Preamble matched @ index %lu\n", samples_index);
+                    DEBUG_MSG("RX: Preamble matched @ buf index %lu (all samp index = %lu)\n",
+                              samples_index, all_samples_idx+samples_index);
                     preamble_detected  = true;
                     new_frame          = true;
+                    checked_frame_type = false;
+                    frame_cnt++;
 
                     //SNR estimator bookkeeping
                     if (waiting_on_snr_est){
@@ -984,29 +994,30 @@ void *phy_receive_frames(void *arg)
                 DEBUG_MSG("RX: State = DEMOD\n");
                 num_bytes_rx = fsk_demod(phy->fsk, &(phy->rx->pnorm_samples[samples_index]),
                                          num_samples_rx_act-(int)samples_index, new_frame,
-                                         num_bytes_to_demod, &rx_buffer[data_index]);
+                                         num_bytes_to_demod, &rx_buffer[data_index],
+                                         &num_samples_processed);
                 if (num_bytes_rx < num_bytes_to_demod){
                     //Receive more samples
                     num_bytes_to_demod -= num_bytes_rx;
-                    state = RECEIVE;
+                    state               = RECEIVE;
                 }else{
-                    if (new_frame){
+                    if (!checked_frame_type){
+                        //On the 1st byte; need to check frame type to determine length
                         state = CHECK_FRAME_TYPE;
-                        //Account for extra sample which defines initial phase
-                        samples_index++;
                     }else{
-                        //We demoded all samples in the frame
+                        //We demodulated all samples in the frame
                         state = DECODE;
                     }
                 }
                 data_index    += num_bytes_rx;
-                samples_index += num_bytes_rx*8*SAMP_PER_SYMB;
+                samples_index += num_samples_processed;
                 new_frame      = false;
                 break;
             case CHECK_FRAME_TYPE:
                 //--Check the frame type byte
                 DEBUG_MSG("RX: State = CHECK_FRAME_TYPE\n");
                 #ifndef BYPASS_PHY_SCRAMBLING
+                    //unscramble
                     frame_type = rx_buffer[0] ^ phy->scrambling_sequence[0];
                 #else
                     frame_type = rx_buffer[0];
@@ -1019,13 +1030,14 @@ void *phy_receive_frames(void *arg)
                     DEBUG_MSG("RX: Getting a data frame...\n");
                     frame_length = phy->max_frame_size;
                 }else{
-                    NOTE("%s: rx'ed unknown frame type 0x%.2X\n",
-                         __FUNCTION__, frame_type);
+                    NOTE("RX: Received unknown frame type 0x%02X. Dropping this frame.\n",
+                         frame_type);
                     data_index        = 0;
                     preamble_detected = false;
-                    state             = RECEIVE;
+                    state             = PREAMBLE_CORRELATE;
                     break;
                 }
+                checked_frame_type = true;
                 //Demod the rest of the bytes
                 num_bytes_to_demod = frame_length-1;
                 state              = DEMOD;
@@ -1049,9 +1061,10 @@ void *phy_receive_frames(void *arg)
                 //frame
                 if (!waiting_on_snr_est){
                     //Prepare new SNR estimate after frame ended
-                    //samples_index is now at the end of frame just before ramp down.
+                    //samples_index is now at the end of frame, at start of ramp down
                     //post-frame samples index to use for noise estimate:
-                    noise_est_pwr_idx  = samples_index + RAMP_LENGTH + pnorm_settle_time;
+                    noise_est_pwr_idx  = samples_index + RAMP_LENGTH +
+                                         DC_OFF_SETTLE_TIME + pnorm_settle_time;
                 }
 
                 if (noise_est_pwr_idx >= num_samples_rx_act){
@@ -1060,16 +1073,19 @@ void *phy_receive_frames(void *arg)
                     waiting_on_snr_est = true;
                 }else{
                     //Have everything needed; compute SNR estimate
-                    noise_est_pwr      = phy->rx->est_power[noise_est_pwr_idx];
-                    sig_est_pwr        = signoise_est_pwr - noise_est_pwr;
-                    snr_est_db         = 10*log10(sig_est_pwr/noise_est_pwr);
+                    noise_est_pwr = phy->rx->est_power[noise_est_pwr_idx];
+                    sig_est_pwr   = signoise_est_pwr - noise_est_pwr;
+                    if (sig_est_pwr <= 0){
+                        snr_est_db = -INFINITY;
+                    }else{
+                        snr_est_db = 10*log10(sig_est_pwr/noise_est_pwr);
+                    }
                     waiting_on_snr_est = false;
-                    DEBUG_MSG("noise_est_pwr_idx = %d\n", noise_est_pwr_idx);
-                    DEBUG_MSG("signoise_est_pwr  = %f\n", signoise_est_pwr);
-                    DEBUG_MSG("noise_est_pwr     = %f\n", noise_est_pwr);
-                    DEBUG_MSG("sig_est_pwr       = %f\n", sig_est_pwr);
-                    DEBUG_MSG("snr_est_db        = %f\n", snr_est_db);
-                    NOTE("RX: Post-filter SNR estimate = %.1f dB\n", snr_est_db);
+                    // NOTE("noise_est_pwr_idx = %d (all samp idx = %lu)\n", noise_est_pwr_idx, all_samples_idx+noise_est_pwr_idx);
+                    // NOTE("signoise_est_pwr  = %f\n", signoise_est_pwr);
+                    // NOTE("noise_est_pwr     = %f\n", noise_est_pwr);
+                    // NOTE("sig_est_pwr       = %f\n", sig_est_pwr);
+                    NOTE("RX: Post-filter SNR estimate = %.1f dB (frame %lu)\n", snr_est_db, frame_cnt);
                 }
 
                 state = next_state;     //Go to previously stored next state
@@ -1080,7 +1096,7 @@ void *phy_receive_frames(void *arg)
                 //Is the link layer still working with the previous frame?
                 if (phy->rx->buf_filled){
                     //Instead of disrupting the link layer, drop this frame
-                    NOTE("RX: Frame dropped!\n");
+                    NOTE("RX: Frame dropped! Had frame ready but byte buffer was full.\n");
                 }else{
                     //Copy frame into rx_data_buf
                     memcpy(phy->rx->data_buf, rx_buffer, frame_length);
@@ -1105,11 +1121,7 @@ void *phy_receive_frames(void *arg)
                 }
                 preamble_detected = false;
 
-                if (samples_index == num_samples_rx_act){
-                    state = RECEIVE;
-                }else{
-                    state = PREAMBLE_CORRELATE;
-                }
+                state = PREAMBLE_CORRELATE;
                 break;
             default:
                 ERROR("%s: Invalid state\n", __FUNCTION__);
@@ -1127,7 +1139,7 @@ void *phy_receive_frames(void *arg)
     * scrambling sequence array must be at least as large as the frame.
     */
     static void unscramble_frame(uint8_t *frame, int frame_length,
-                                    uint8_t *scrambling_sequence)
+                                 uint8_t *scrambling_sequence)
     {
         int i;
         for (i = 0; i < frame_length; i++){

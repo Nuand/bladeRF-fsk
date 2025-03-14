@@ -48,11 +48,9 @@
 
 #include "common.h"
 #include "utils.h"
-#include "link.h" //for link layer payload size defintions
+#include "link.h" //for link layer frame type definitions
 
 //Training sequence which goes at the start of every frame
-//Note: In order for the preamble waveform not to be messed up, the last
-//sample of the modulated training sequence MUST be 1 + 0j (2047 + 0j)
 #define TRAINING_SEQ {0xAA, 0xAA, 0xAA, 0xAA}
 //Length of training sequence in bytes
 #define TRAINING_SEQ_LENGTH 4
@@ -60,9 +58,6 @@
 #define PREAMBLE {0x2E, 0x69, 0x2C, 0xF0}
 //Length of preamble in bytes
 #define PREAMBLE_LENGTH 4
-//Byte codes for data/ack frame
-#define DATA_FRAME_CODE 0x00
-#define ACK_FRAME_CODE 0xFF
 //Seed for pseudorandom number sequence generator
 #define PRNG_SEED 0x0109BBA53CFFD081
 //Length (in samples) of ramp up/ramp down
@@ -73,6 +68,10 @@
 #define CORR_COUNTDOWN SAMP_PER_SYMB
 //power normalization alpha coefficient - how slowly it responds to changes in power
 #define PNORM_ALPHA 0.95f
+#define PNORM_MIN_GAIN 0.1f
+#define PNORM_MAX_GAIN 50.0f
+//time needed (in samples) for DC offset to settle to 0 after end of frame (bladerf 2)
+#define DC_OFF_SETTLE_TIME 25000
 
 //DEBUG: Define this to write all RX samples out to binary file
 // #define LOG_RX_SAMPLES

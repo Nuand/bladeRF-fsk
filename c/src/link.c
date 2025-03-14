@@ -53,7 +53,7 @@
 
 struct data_frame {
     //Total frame length = 1009 bytes (8072 bits)
-    uint8_t type;                   //0x00 = data frame, 0xFF = ack frame
+    uint8_t  type;                  //0x00 = data frame, 0xFF = ack frame
     uint16_t seq_num;               //Sequence number
     uint16_t used_payload_length;   //Length of used payload data in bytes
     uint8_t *payload;               //payload data - dynamically allocated
@@ -62,51 +62,49 @@ struct data_frame {
 
 struct ack_frame {
     //Total frame length = 7 bytes (56 bits)
-    uint8_t type;               //0x00 = data frame, 0xFF = ack frame
-    uint16_t ack_num;           //Acknowledgement number
-    uint32_t crc32;             //32-bit CRC
+    uint8_t  type;                  //0x00 = data frame, 0xFF = ack frame
+    uint16_t ack_num;               //Acknowledgement number
+    uint32_t crc32;                 //32-bit CRC
 };
 
 struct tx {
-    struct data_frame data_frame_buf;   //Input data frame buffer
-    struct ack_frame ack_frame_buf;     //Input ack frame buffer
-    bool stop;                          //Signal to stop tx thread
-    bool data_buf_filled;               //Is the data frame buffer filled
-    pthread_t thread;                   //Transmitter thread
-    pthread_cond_t data_buf_filled_cond;    //pthread condition corresponding to
-                                            //data_buf_filled
-    pthread_mutex_t data_buf_status_lock;   //Mutex for data_buf_filled_cond
-    bool link_on;   //Is the transmitter on
-    bool done;      //Has the transmitter finished a transmission
-    bool success;   //Was the transmitter transmission successful
+    struct data_frame data_frame_buf;       //Input data frame buffer
+    struct ack_frame  ack_frame_buf;        //Input ack frame buffer
+    bool              stop;                 //Signal to stop tx thread
+    bool              data_buf_filled;      //Is the data frame buffer filled
+    pthread_t         thread;               //Transmitter thread
+    pthread_cond_t    data_buf_filled_cond; //pthread condition for data_buf_filled
+    pthread_mutex_t   data_buf_status_lock; //Mutex for data_buf_filled_cond
+    bool              link_on;              //Is the transmitter on
+    bool              done;                 //Has the transmitter finished a transmission
+    bool              success;              //Was the transmitter transmission successful
 };
 
 struct rx {
-    struct data_frame data_frame_buf;   //Output data frame buffer
-    struct ack_frame ack_frame_buf;     //Output ack frame buffer
-    //Leftover bytes received but not returned to the user after a call to
-    //link_receive_data()
-    uint8_t *extra_bytes;
-    unsigned int num_extra_bytes;       //Number of bytes in 'extra_bytes' buffer
-    pthread_t thread;                   //Receiver thread
-    bool stop;                          //Signal to stop rx thread
-    bool data_buf_filled;               //Is the data frame buffer filled
-    pthread_cond_t data_buf_filled_cond;    //pthread condition for data_buf_filled
-    pthread_mutex_t data_buf_status_lock;   //mutex for data_buf_filled_cond
-    bool ack_buf_filled;                    //Is the ack frame buffer filled
-    pthread_cond_t ack_buf_filled_cond;     //pthread condition for ack_buf_filled
-    pthread_mutex_t ack_buf_status_lock;    //mutex for ack_buf_filled_cond
-    bool link_on;                           //Is the receiver on
+    struct data_frame data_frame_buf;       //Output data frame buffer
+    struct ack_frame  ack_frame_buf;        //Output ack frame buffer
+    uint8_t          *extra_bytes;          //Leftover bytes received but not returned to 
+                                            //the user after a call to link_receive_data()
+    unsigned int      num_extra_bytes;      //Number of bytes in 'extra_bytes' buffer
+    pthread_t         thread;               //Receiver thread
+    bool              stop;                 //Signal to stop rx thread
+    bool              data_buf_filled;      //Is the data frame buffer filled
+    pthread_cond_t    data_buf_filled_cond; //pthread condition for data_buf_filled
+    pthread_mutex_t   data_buf_status_lock; //mutex for data_buf_filled_cond
+    bool              ack_buf_filled;       //Is the ack frame buffer filled
+    pthread_cond_t    ack_buf_filled_cond;  //pthread condition for ack_buf_filled
+    pthread_mutex_t   ack_buf_status_lock;  //mutex for ack_buf_filled_cond
+    bool              link_on;              //Is the receiver on
 };
 
 struct link_handle {
     struct phy_handle *phy;
-    struct tx *tx;
-    struct rx *rx;
-    bool phy_tx_on;     //Is the phy transmitter on
-    bool phy_rx_on;     //Is the phy receiver on
-    unsigned int payload_length;    //link frame payload length
-    unsigned int frame_length;      //full link frame length including header/footer
+    struct tx         *tx;
+    struct rx         *rx;
+    bool               phy_tx_on;       //Is the phy transmitter on
+    bool               phy_rx_on;       //Is the phy receiver on
+    unsigned int       payload_length;  //link frame payload length
+    unsigned int       frame_length;    //full link frame length including header/footer
 };
 
 //internal functions
@@ -193,11 +191,11 @@ struct link_handle *link_init(struct bladerf *dev, struct radio_params *params, 
     }
 
     //Initialize control/state variables
-    link->tx->stop = false;
+    link->tx->stop            = false;
     link->tx->data_buf_filled = false;
-    link->tx->done = false;
-    link->tx->success = false;
-    link->tx->link_on = false;
+    link->tx->done            = false;
+    link->tx->success         = false;
+    link->tx->link_on         = false;
     //Initialize pthread condition variable
     status = pthread_cond_init(&(link->tx->data_buf_filled_cond), NULL);
     if (status != 0){
@@ -253,11 +251,11 @@ struct link_handle *link_init(struct bladerf *dev, struct radio_params *params, 
         goto error;
     }
     //Initialize control/state variables
-    link->rx->stop = false;
+    link->rx->stop            = false;
     link->rx->data_buf_filled = false;
-    link->rx->ack_buf_filled = false;
+    link->rx->ack_buf_filled  = false;
     link->rx->num_extra_bytes = 0;
-    link->rx->link_on = false;
+    link->rx->link_on         = false;
 
     //---------------------Start the link receiver--------------------------
     status = start_receiver(link);
@@ -498,10 +496,10 @@ static int start_transmitter(struct link_handle *link)
 {
     int status;
 
-    link->tx->done = false;
+    link->tx->done    = false;
     link->tx->success = false;
     //be sure stop signal is off
-    link->tx->stop = false;
+    link->tx->stop    = false;
     //Kick off transmitter thread
     status = pthread_create(&(link->tx->thread), NULL, transmit_data_frames, link);
     if (status != 0){
@@ -667,12 +665,12 @@ static int send_payload(struct link_handle *link, uint8_t *payload,
  */
 void *transmit_data_frames(void *arg)
 {
-    int status;
-    uint16_t seq_num;
-    uint32_t crc_32;
+    int          status;
+    uint16_t     seq_num;
+    uint32_t     crc_32;
     unsigned int tries;
-    uint8_t *data_send_buf;
-    bool failed;
+    uint8_t     *data_send_buf;
+    bool         failed;
 
     //cast arg
     struct link_handle *link = (struct link_handle *) arg;
@@ -694,8 +692,8 @@ void *transmit_data_frames(void *arg)
             DEBUG_MSG("TX: Exceeded max tries (%u) without an ACK."
                       " Skipping frame\n", tries-1);
             link->tx->success = false;
-            link->tx->done = true;
-            tries = 1;
+            link->tx->done    = true;
+            tries             = 1;
         }
         if (tries == 1){
             //---------Wait for data buffer to be filled-----------
@@ -767,10 +765,10 @@ void *transmit_data_frames(void *arg)
             goto out;
         }
         //Success!
-        DEBUG_MSG("TX: Got an ACK\n");
+        DEBUG_MSG("TX: Got an ACK (ack# = %hu)\n", seq_num);
         link->tx->success = true;
-        link->tx->done = true;
-        tries = 1;
+        link->tx->done    = true;
+        tries             = 1;
         seq_num++;
     }
 
@@ -1067,15 +1065,15 @@ static int receive_ack(struct link_handle *link, uint16_t ack_num, unsigned int 
  */
 void *receive_frames(void *arg)
 {
-    uint8_t *rx_buf = NULL;
+    uint8_t     *rx_buf = NULL;
     unsigned int frame_length;
-    uint32_t crc_32, crc_32_rx;
-    bool is_data_frame = false;
-    int status;
-    uint8_t ack_send_buf[ACK_FRAME_LENGTH];
-    uint16_t seq_num = 0;
-    bool first_frame = true;
-    bool duplicate;
+    uint32_t     crc_32, crc_32_rx;
+    bool         is_data_frame = false;
+    int          status;
+    uint8_t      ack_send_buf[ACK_FRAME_LENGTH];
+    uint16_t     seq_num = 0;
+    bool         first_frame = true;
+    bool         duplicate;
 
     //cast arg
     struct link_handle *link = (struct link_handle *) arg;
@@ -1152,12 +1150,12 @@ void *receive_frames(void *arg)
                     phy_release_rx_buf(link->phy);
                     //Is this frame a duplicate of the last frame?
                     if (link->rx->data_frame_buf.seq_num == seq_num && !first_frame){
-                        DEBUG_MSG("RX: Received a duplicate frame.\n");
+                        NOTE("RX: Received a duplicate frame. Will send ACK but ignore data\n");
                         duplicate = true;
                     }else{
                         duplicate = false;
                     }
-                    seq_num = link->rx->data_frame_buf.seq_num;
+                    seq_num     = link->rx->data_frame_buf.seq_num;
                     first_frame = false;
                     //Mark buffer filled if not a duplicate data frame
                     if (!duplicate){
@@ -1219,7 +1217,7 @@ void *receive_frames(void *arg)
                 //--We received a data frame, now it's time to send the ack
                 DEBUG_MSG("RX: State = SEND_ACK (ack# = %hu)\n", seq_num);
 
-                link->tx->ack_frame_buf.type = 0xFF;
+                link->tx->ack_frame_buf.type    = ACK_FRAME_CODE;
                 link->tx->ack_frame_buf.ack_num = seq_num;
 
                 //Copy frame into send buf

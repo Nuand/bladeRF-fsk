@@ -76,6 +76,9 @@ info = struct('iq_filt_norm' , -1, ...
               'sig_start_idx', -1, ...
               'dphase_sym'   , -1);
 
+%num samples for DC offset to settle to 0 after a frame (bladeRF 2)
+dc_off_settle_time = 30e3;
+
 corr_peak_thresh = 0.5625 * (length(preamble_waveform)/decimation_factor)^2;
 info.corr_thresh = corr_peak_thresh;
 
@@ -91,9 +94,9 @@ end
 %Power normalize signal to roughly [-1, 1], following algorithm in C implementation
 pnorm_alpha             = 0.95;
 pnorm_min_gain          = 0.1;
-pnorm_max_gain          = 20;
-[iq_signal,est_power,~, settle_time] = pnorm(iq_signal, 1, pnorm_alpha, ...
-                                             pnorm_min_gain, pnorm_max_gain);
+pnorm_max_gain          = 50;
+[iq_signal,est_power,~,pnorm_settle_time] = pnorm(iq_signal, 1, pnorm_alpha, ...
+                                                  pnorm_min_gain, pnorm_max_gain);
 info.iq_filt_norm       = iq_signal;
 
 %Correlate input IQ signal with known preamble waveform
@@ -128,10 +131,10 @@ info.sig_start_idx = sig_start_idx;
 %and preamble have come through, so est_power has had time to stabilize.
 signoise_est_pwr = est_power(sig_start_idx);
 %N power: Use est_power after end of frame
-%frame end index: after all bytes, plus after ramp down
-frame_end_idx    = sig_start_idx + num_bytes*8*samps_per_symb + samps_per_symb;
-%est_power noise index: add time for IIR filter to settle
-noise_est_idx    = frame_end_idx + settle_time;
+%frame end index: after all bytes and ramp down. +1 for setting init phase
+frame_end_idx    = sig_start_idx + 1 + num_bytes*8*samps_per_symb + samps_per_symb;
+%est_power noise index: add time for DC offset and pnorm IIR filters to settle
+noise_est_idx    = frame_end_idx + dc_off_settle_time + pnorm_settle_time;
 if noise_est_idx > length(est_power)
    fprintf(2, ['%s: Not enough samples to allow time for noise power estimate to ' ...
                'fully settle. SNR estimate may not be accurate. Add more 0 samples to' ...
