@@ -845,6 +845,7 @@ void *phy_receive_frames(void *arg)
     unsigned long           frame_cnt          = 0;
     unsigned long           all_samples_idx    = 0;
     int                     num_samples_processed;  //num samps processed by fsk_demod())
+    bool                    enable_snr_est;
 
     enum states {RECEIVE, PREAMBLE_CORRELATE, DEMOD, CHECK_FRAME_TYPE, DECODE, ESTIMATE_SNR,
                  COPY};
@@ -853,6 +854,13 @@ void *phy_receive_frames(void *arg)
 
     //corr_process() takes a size_t count. Ensure a cast from uint64_t to size_t is valid
     assert(NUM_SAMPLES_RX < SIZE_MAX);
+
+    //enable for SNR estimator (mostly to prevent compile warnings)
+    #ifdef ENABLE_NOTES
+        enable_snr_est = true;
+    #else
+        enable_snr_est = false;
+    #endif
 
     //Allocate memory for buffer
     rx_buffer = malloc(phy->max_frame_size);
@@ -1051,8 +1059,13 @@ void *phy_receive_frames(void *arg)
                 #endif
                 next_state = COPY;
 
-                //Done processing frame. Prepare SNR estimate before going to next state
-                state = ESTIMATE_SNR;
+                //Done processing frame. Prepare SNR estimate (if enabled) before going to
+                //next state
+                if (enable_snr_est){
+                    state = ESTIMATE_SNR;
+                }else{
+                    state = next_state;
+                }
                 break;
             case ESTIMATE_SNR:
                 //--Estimate SNR (if we have the noise sample) then go back to what we
@@ -1081,11 +1094,8 @@ void *phy_receive_frames(void *arg)
                         snr_est_db = 10*log10(sig_est_pwr/noise_est_pwr);
                     }
                     waiting_on_snr_est = false;
-                    // NOTE("noise_est_pwr_idx = %d (all samp idx = %lu)\n", noise_est_pwr_idx, all_samples_idx+noise_est_pwr_idx);
-                    // NOTE("signoise_est_pwr  = %f\n", signoise_est_pwr);
-                    // NOTE("noise_est_pwr     = %f\n", noise_est_pwr);
-                    // NOTE("sig_est_pwr       = %f\n", sig_est_pwr);
-                    NOTE("RX: Post-filter SNR estimate = %.1f dB (frame %lu)\n", snr_est_db, frame_cnt);
+                    fprintf(stderr, "[PHY] RX: Post-filter SNR estimate = %.1f dB (frame %lu)\n",
+                            snr_est_db, frame_cnt);
                 }
 
                 state = next_state;     //Go to previously stored next state

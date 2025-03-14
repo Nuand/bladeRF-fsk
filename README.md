@@ -58,28 +58,29 @@ When bladeRF-fsk_test_suite gets to phy_receive_test(), be sure to watch the CPU
 
 Below is a list of project-specific CMake options.
 
-| Option                                            | Description                                                             |
-| ------------------------------------------------- |:------------------------------------------------------------------------|
-| `-DBLADERF-FSK_BYPASS_RX_CHANNEL_FILTER=<ON/OFF>` | Bypass the RX low-pass channel filter. Default: OFF                     |
-| `-DBLADERF-FSK_BYPASS_RX_PNORM         =<ON/OFF>` | Bypass RX power normalization. Default: OFF                             |
-| `-DBLADERF-FSK_BYPASS_PHY_SCRAMBLING   =<ON/OFF>` | Bypass scrambling in the PHY layer. Default: OFF                        |
-| `-DBLADERF-FSK_ENABLE_NOTES_LINK       =<ON/OFF>` | Print noteworthy messages from link.c. Default: OFF                     |
-| `-DBLADERF-FSK_ENABLE_NOTES_PHY        =<ON/OFF>` | Print noteworthy messages from phy.c. Default: OFF                      |
-| `-DBLADERF-FSK_ENABLE_DEBUG_ALL        =<ON/OFF>` | Print debug messages from all files & bladeRF. Default: OFF             |
-| `-DBLADERF-FSK_ENABLE_DEBUG_TEST_SUITE =<ON/OFF>` | Print debug messages from test_suite.c. Default: OFF                    |
-| `-DBLADERF-FSK_ENABLE_DEBUG_CONFIG     =<ON/OFF>` | Print debug messages from config.c. Default: OFF                        |
-| `-DBLADERF-FSK_ENABLE_DEBUG_LINK       =<ON/OFF>` | Print debug messages from link.c. Default: OFF                          |
-| `-DBLADERF-FSK_ENABLE_DEBUG_PHY        =<ON/OFF>` | Print debug messages from phy.c. Default: OFF                           |
-| `-DBLADERF-FSK_ENABLE_DEBUG_CORR       =<ON/OFF>` | Print debug messages from correlator.c. Default: OFF                    |
-| `-DBLADERF-FSK_ENABLE_DEBUG_BLADERF    =<ON/OFF>` | Print bladeRF debug messages. Default: OFF                              |
-| `-DBLADERF-FSK_ENABLE_VERBOSE_BLADERF  =<ON/OFF>` | Print bladeRF verbose (and debug) messages. Default: OFF                |
-| `-DBLADERF-FSK_LOG_TX_SAMPLES          =<ON/OFF>` | Log all TX samples to binary file tx_samples_[serial].bin. Default: OFF |
-| `-DBLADERF-FSK_LOG_RX_SAMPLES          =<ON/OFF>` | Log all RX samples to binary file rx_samples_[serial].bin. Default: OFF |
+| Option                                            | Description                                                                                 |
+| ------------------------------------------------- |:--------------------------------------------------------------------------------------------|
+| `-DBLADERF-FSK_BYPASS_RX_CHANNEL_FILTER=<ON/OFF>` | Bypass the RX low-pass channel filter. Default: OFF                                         |
+| `-DBLADERF-FSK_BYPASS_RX_PNORM         =<ON/OFF>` | Bypass RX power normalization. Default: OFF                                                 |
+| `-DBLADERF-FSK_BYPASS_PHY_SCRAMBLING   =<ON/OFF>` | Bypass scrambling in the PHY layer. Default: OFF                                            |
+| `-DBLADERF-FSK_ENABLE_NOTES_LINK       =<ON/OFF>` | Print noteworthy messages from link.c, including CRC errors. Default: OFF                   |
+| `-DBLADERF-FSK_ENABLE_NOTES_PHY        =<ON/OFF>` | Print noteworthy messages from phy.c, including SNR estimates and RX overruns. Default: OFF |
+| `-DBLADERF-FSK_ENABLE_DEBUG_ALL        =<ON/OFF>` | Print debug messages from all files & bladeRF. Default: OFF                                 |
+| `-DBLADERF-FSK_ENABLE_DEBUG_TEST_SUITE =<ON/OFF>` | Print debug messages from test_suite.c. Default: OFF                                        |
+| `-DBLADERF-FSK_ENABLE_DEBUG_CONFIG     =<ON/OFF>` | Print debug messages from config.c. Default: OFF                                            |
+| `-DBLADERF-FSK_ENABLE_DEBUG_LINK       =<ON/OFF>` | Print debug messages from link.c. Default: OFF                                              |
+| `-DBLADERF-FSK_ENABLE_DEBUG_PHY        =<ON/OFF>` | Print debug messages from phy.c. Default: OFF                                               |
+| `-DBLADERF-FSK_ENABLE_DEBUG_CORR       =<ON/OFF>` | Print debug messages from correlator.c. Default: OFF                                        |
+| `-DBLADERF-FSK_ENABLE_DEBUG_BLADERF    =<ON/OFF>` | Print bladeRF debug messages. Default: OFF                                                  |
+| `-DBLADERF-FSK_ENABLE_VERBOSE_BLADERF  =<ON/OFF>` | Print bladeRF verbose (and debug) messages. Default: OFF                                    |
+| `-DBLADERF-FSK_LOG_TX_SAMPLES          =<ON/OFF>` | Log all TX samples to binary file tx_samples_[serial].bin. Default: OFF                     |
+| `-DBLADERF-FSK_LOG_RX_SAMPLES          =<ON/OFF>` | Log all RX samples to binary file rx_samples_[serial].bin. Default: OFF                     |
 
 Setting -DBLADERF-FSK_ENABLE_NOTES_LINK=ON will show you when a frame is received with
-CRC errors. Setting -DBLADERF-FSK_ENABLE_NOTES_PHY=ON will show you when RX overruns
-occur, meaning the PHY receiver thread could not process a set of samples fast enough
-and samples had to be dropped.
+CRC errors. Setting -DBLADERF-FSK_ENABLE_NOTES_PHY=ON will enable SNR estimates to print
+out after every received frame, and it will show you when RX overruns occur, meaning the
+PHY receiver thread could not process a set of samples fast enough and samples had to be
+dropped.
 
 ## How to Run ##
 To run the top-level bladeRF-fsk program with defaults, type into a terminal:
@@ -121,7 +122,7 @@ bladeRF-fsk -r 924M -t 904M
 5) Press [CTRL-D] on Linux/OSX or [CTRL-Z then ENTER] on Windows to quit
 
 If the sending device does not get any response from the receiving device, it will quit
-the program. Try increasing the TX gain and run it again.
+the program. Try adjusting the gains and run it again.
 
 ### Example: Transferring Files Between BladeRFs ###
 1) Be sure two bladeRF devices are plugged into your PC (or two separate PCs) with
@@ -143,7 +144,7 @@ bladeRF-fsk -r 924M -t 904M -i puppy.jpg
    on Windows to stop the program on the receiving end.
 
 If the sending device does not get any response from the receiving device, it will quit
-the program. Try increasing the TX gain and run it again.
+the program. Try adjusting the gains and run it again.
 
 ## Known Limitations ##
 1) The program does not currently support the use of an XB-200 transverter expansion
@@ -152,11 +153,46 @@ the program. Try increasing the TX gain and run it again.
    "Expansion boards" section of the libbladeRF API would need to be added to the source
    code.
 
-2) The program is currently unable to perform two full file transfers in both directions
+2) The program is currently unable to properly perform two full file transfers in both directions
    simultaneously. Reason: The program runs until is gets an EOF in its TX input,
    meaning whichever side finishes transmitting its file first will quit and stop
    receiving. An EOF bit would need to be added to the link layer packet format in order
    to stop this behavior.
+
+## Troubleshooting ##
+Is the FSK modem not working for you? Here are some troubleshooting steps:
+
+1) Enable debug messages to get a clearer picture of what's going on. Use the cmake option
+  `-DBLADERF-FSK_ENABLE_DEBUG_ALL=ON`. For example, you'll be able to see if a signal is
+  being acquired but the frame has CRC errors. You can go a step further and also set
+  `-DBLADERF-FSK_ENABLE_VERBOSE_BLADERF=ON` to get full verbosity in bladeRF device
+  messages from libbladeRF.
+
+2) Adjust the TX and RX gains. If TX+RX gains are too high, the receiver may experience
+  clipping which can cause bit errors or weaken acquisition. If TX gain is too low, SNR
+  may be too low to acquire and/or demodulate without errors. If RX gain is too low, there
+  may be too much quantization noise at the receiver.
+
+3) Log received samples to file, using cmake option `-DBLADERF-FSK_LOG_RX_SAMPLES=ON`.
+  File format is binary 16-bit IQ with each sample having a range of [-2047, 2048], I
+  before Q in each IQ sample pair, little endian.
+   * Feed the signal into the FSK model by running `matlab/fsk.m` in MATLAB/Octave, which will plot the signal, correlate, and attempt to demodulate it. Set `use_file=1`, `csv=0`, `no_tx=1`, `rx_nbytes` to your payload length + 9 for link layer header/footer, and replace `rxfile=rx_samples.bin` with the path to your samples file.
+     * Note that `fsk.m` does not include link layer functionality, so it will not perform a CRC check and it will display link layer header and footer bytes.
+   * You can manually ingest the signal in MATLAB/Octave using `host/misc/matlab/load_sc16q11()` (signal will be normalized to [-1.0, 1.0) floating point). Then plot and analyze it.
+
+4) Move devices very close to each other to maximize signal power. Or, replace antennas
+  with SMA cables (TX hooked up to RX) and perform wired testing to rule out any RF
+  channel effects or interference. Note: BE CAREFUL not to set TX gain too high to damage
+  your device during wired testing. Start with a low gain. Suggested wired gains below:
+   * On the bladeRF 2, `--tx-gain 50`, `--rx-gain -16` will result in roughly 1/3 scale signal (no clipping) with very low noise and distortion.
+   * On the bladeRF 1, `--tx-vga1 -4`, `--tx-vga2 0`, with RX gains set to the very minimum, will result in a similar signal that does not clip at the receiver.
+
+5) Check for frequency offset (could be caused by bad calibration). A high enough frequency
+  offset (say 20 kHz) will cause signal acquisition to fail. In `c/src/phy.h`, uncomment
+  `#define TX_DC_TONE` then rebuild the program to make the PHY transmitter send a DC tone
+  in its bursts instead of an FSK signal. Log the received samples to file, and find the
+  frequency of the large DC tone spike on the spectrum. Frequency offsets are expected but
+  they should be <500 Hz or so if the bladeRF is properly calibrated.
 
 ## Modem Details ##
 ### Waveform Specifications ###
