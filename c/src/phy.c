@@ -1094,12 +1094,10 @@ void *phy_receive_frames(void *arg)
                     break;
                 }
                 noise_est_pwr_idx = corr_samp_idx - phy_hdr_len;
-                DEBUG_MSG("noise_est_pwr_idx = %lu\n", noise_est_pwr_idx);
 
                 //Convert total samples index to buffer index
                 if (noise_est_pwr_idx < samp_idx){
                     //Noise power estimate is in previous buffer
-                    DEBUG_MSG("noise_est_pwr_idx is in previous buffer\n");
                     noise_est_pwr_idx = noise_est_pwr_idx -
                                         (samp_idx - num_samples_rx_act[!samp_buf_sel]);
                     noise_est_pwr     = phy->rx->est_power[!samp_buf_sel][noise_est_pwr_idx];
