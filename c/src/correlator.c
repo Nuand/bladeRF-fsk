@@ -48,29 +48,29 @@ struct complexf {
 };
 
 struct correlator {
-    struct complexf *ref;       /* Reference signal to correlate against */
-    size_t len;                 /* Length of reference sig, insamples */
+    struct complexf *ref;               /* Reference signal to correlate against */
+    size_t           len;               /* Length of reference sig, in samples */
 
-    float threshold_pwr;        /* Correlation power threshold */
+    float            threshold_pwr;     /* Correlation power threshold */
 
-    float max;                  /* Max correlation value we've seen so far */
+    float            max;               /* Max correlation value we've seen so far */
 
-    unsigned int num_counts;    /* Number of samples to observe after a
-                                 * detected correlation and before asserting
-                                 * a match. This is intended to ensure we
-                                 * we report the local maxima.
-                                 */
+    unsigned int     num_counts;        /* Number of samples to observe after a
+                                         * detected correlation and before asserting
+                                         * a match. This is intended to ensure we
+                                         * we report the local maxima.
+                                         */
 
-    unsigned int countdown;     /* Countdown until a value exceeding the
-                                 * max value is reported */
+    unsigned int     countdown;         /* Countdown until a value exceeding the
+                                         * max value is reported */
 
-    uint64_t match_timestamp;   /* Timestamp when we found our max
-                                 * correlation value */
+    uint64_t         match_timestamp;   /* Timestamp when we found our max
+                                         * correlation value */
 
-    struct complexf *buf;       /* Sample buffer */
-    struct complexf *ins1;      /* Insertion points */
+    struct complexf *buf;               /* Sample buffer */
+    struct complexf *ins1;              /* Insertion points */
     struct complexf *ins2;
-    struct complexf *end;       /* Pointer to element past buf */
+    struct complexf *end;               /* Pointer to element past buf */
 
 #   ifdef LOG_CORRELATOR_OUTPUT
     FILE *out;
@@ -97,10 +97,10 @@ static void save_reference_sig(struct complexf *ref, size_t len)
 
 struct correlator *corr_init(uint8_t *syms, size_t n, unsigned int sps)
 {
-    int status = -1;
-    size_t i;
-    struct correlator *ret = NULL;
-    struct fsk_handle *fsk = NULL;
+    int                    status = -1;
+    size_t                 i;
+    struct correlator     *ret = NULL;
+    struct fsk_handle     *fsk = NULL;
     struct complex_sample *raw_samples = NULL;
 #ifdef LOG_CORRELATOR_OUTPUT
     char log_name[] = "correlator_log.csv";
@@ -159,10 +159,10 @@ struct correlator *corr_init(uint8_t *syms, size_t n, unsigned int sps)
     }
     fsk_mod(fsk, syms, (int)n/8, raw_samples);
     //Convert sc16q11 to complexf and decimate
-       for (i = 0; i < ret->len; i ++){
+    for (i = 0; i < ret->len; i ++){
         ret->ref[i].real = raw_samples[i*DECIMATION_FACTOR].i/2048.0f;
         ret->ref[i].imag = raw_samples[i*DECIMATION_FACTOR].q/2048.0f;
-       }
+    }
 
     /* Take the complex conjugate of our modulated reference signal
      * to avoid needing to do this each time we perform a dot product
@@ -171,11 +171,11 @@ struct correlator *corr_init(uint8_t *syms, size_t n, unsigned int sps)
         ret->ref[i].imag = -ret->ref[i].imag;
     }
 
-    ret->end = &ret->buf[2 * ret->len];
+    ret->end           = &ret->buf[2 * ret->len];
     //Maximum power is ret->len * ret->len
     ret->threshold_pwr = ret->len * ret->len * 0.5625f;
 
-    ret->num_counts = sps/DECIMATION_FACTOR - 1;
+    ret->num_counts    = sps/DECIMATION_FACTOR - 1;
 
     corr_reset(ret);
 
@@ -186,11 +186,8 @@ struct correlator *corr_init(uint8_t *syms, size_t n, unsigned int sps)
     status = 0;
 
     DEBUG_MSG("Correlator decimation factor = %u\n", DECIMATION_FACTOR);
-    DEBUG_MSG("Correlator length: %zd symbols (%zd samples)\n",
-        n, ret->len);
-
+    DEBUG_MSG("Correlator length: %zd symbols (%zd samples)\n", n, ret->len);
     DEBUG_MSG("Correlator power threshold: %f\n", ret->threshold_pwr);
-
 
 out:
     if (status != 0) {
@@ -233,8 +230,8 @@ void corr_reset(struct correlator *corr)
     if (corr != NULL) {
         reset_insertion_points(corr);
         corr->match_timestamp = CORRELATOR_NO_RESULT;
-        corr->max = corr->threshold_pwr;
-        corr->countdown = COUNTDOWN_INACTIVE;
+        corr->max             = corr->threshold_pwr;
+        corr->countdown       = COUNTDOWN_INACTIVE;
 
         for (i = 0; i < (2 * corr->len); i++) {
             corr->buf[i].real = corr->buf[i].imag = 0.0f;
@@ -253,8 +250,8 @@ uint64_t corr_process(struct correlator *corr,
     for (i = 0; i < n; i += DECIMATION_FACTOR) {
         struct complexf *ref = corr->ref + corr->len - 1;
         struct complexf *buf = corr->ins2;
-        struct complexf result;
-        float result_pwr;
+        struct complexf  result;
+        float            result_pwr;
 
         /* Insert sample */
         //Scale by 1/2048
@@ -279,12 +276,12 @@ uint64_t corr_process(struct correlator *corr,
 #       endif
 
         if (result_pwr > corr->max) {
-            corr->max = result_pwr;
-            corr->countdown = corr->num_counts;
+            corr->max             = result_pwr;
+            corr->countdown       = corr->num_counts;
             corr->match_timestamp = timestamp;
 
-            DEBUG_MSG("Got a match at %"PRIu64", result_pwr=%f. Resetting countdown.\n",
-                timestamp, result_pwr);
+            DEBUG_MSG("Got a match at timestamp=%"PRIu64", result_pwr=%f. Resetting countdown.\n",
+                      timestamp, result_pwr);
 
         } else if (corr->countdown != COUNTDOWN_INACTIVE) {
             //Find the peak
@@ -326,17 +323,17 @@ static uint8_t code_a[] = { 0x2E, 0x69, 0x2C, 0xF0 };
 
 int main(int argc, char *argv[])
 {
-    FILE *in = NULL;
+    FILE    *in = NULL;
     int16_t *raw_samples = NULL;
-    struct complex_sample *samples = NULL;
-    struct correlator *corr = NULL;
+    struct   complex_sample *samples = NULL;
+    struct   correlator *corr = NULL;
     uint64_t timestamp = 0;
     uint64_t acquisition = CORRELATOR_NO_RESULT;
-    int sps;
-    int i;
-    int status = -1;
+    int      sps;
+    int      i;
+    int      status = -1;
 
-    int num_samples;
+    int      num_samples;
 
     if (argc != 3) {
         fprintf(stderr, "Usage: %s <CSV input file> <sps>\n", argv[0]);

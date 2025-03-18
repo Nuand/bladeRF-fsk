@@ -27,7 +27,7 @@
 #include "fsk.h"
 
 #ifdef DEBUG_MODE
-    #define DEBUG_MSG(...) fprintf(stderr, __VA_ARGS__)
+    #define DEBUG_MSG(...) fprintf(stderr, "[FSK] " __VA_ARGS__)
 #else
     #define DEBUG_MSG(...)
 #endif

@@ -73,15 +73,18 @@
 //time needed (in samples) for DC offset to settle to 0 after end of frame (bladerf 2)
 #define DC_OFF_SETTLE_TIME 25000
 
-//DEBUG: Define this to write all RX samples out to binary file
+//DEBUG: Define this to write all RX samples out to binary file rx_samples_[serial].bin
 // #define LOG_RX_SAMPLES
 //DEBUG: Define this to log filtered/normalized samples instead of raw samples when
 //       LOG_RX_SAMPLES is defined
 // #define LOG_RX_SAMPLES_USE_PNORM
-//DEBUG: Define this to write all TX samples out to binary file
+//DEBUG: Define this to write all TX samples out to binary file tx_samples_[serial].bin
 // #define LOG_TX_SAMPLES
 //DEBUG: Define this to replace TX frame transmissions with a DC tone
 // #define TX_DC_TONE
+//DEBUG: Define this to use a binary file for RX input samples, in_rx_samples_[serial].bin
+//instead of actual samples returned by bladerf_sync_rx()
+// #define RX_SAMPLES_FROM_FILE
 
 
 struct phy_handle;

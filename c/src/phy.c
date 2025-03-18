@@ -60,7 +60,10 @@
 
 //Internal structs
 struct rx {
-    int16_t               *in_samples;      //Raw input samples from device
+    int16_t               *in_samples[2];   //Raw input samples from device
+                                            //2 buffers - ping pong to handle edge cases
+                                            //in phy_receive_frames where past samples are
+                                            //needed
     struct fir_filter     *ch_filt;         //Channel filter
     struct pnorm_state_t  *pnorm;           //Power normalizer
     struct correlator     *corr;            //Correlator
@@ -238,14 +241,19 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params,
         perror("[PHY] malloc");
         goto error;
     }
-    //Allocate memory for rx samples buffer
-    phy->rx->in_samples = malloc(NUM_SAMPLES_RX * 2 * sizeof(phy->rx->in_samples[0]));
-    if (phy->rx->in_samples == NULL){
+    //Allocate memory for rx samples buffers
+    phy->rx->in_samples[0] = malloc(NUM_SAMPLES_RX * 2 * sizeof(phy->rx->in_samples[0][0]));
+    if (phy->rx->in_samples[0] == NULL){
+        perror("[PHY] malloc");
+        goto error;
+    }
+    phy->rx->in_samples[1] = malloc(NUM_SAMPLES_RX * 2 * sizeof(phy->rx->in_samples[0][0]));
+    if (phy->rx->in_samples[1] == NULL){
         perror("[PHY] malloc");
         goto error;
     }
 
-    // Allocate memory for filtered RX samples
+    //Allocate memory for filtered RX samples
     phy->rx->filt_samples = malloc(NUM_SAMPLES_RX * sizeof(struct complex_sample));
     if (phy->rx->filt_samples == NULL){
         perror("[PHY] malloc");
@@ -390,7 +398,8 @@ void phy_close(struct phy_handle *phy)
             fir_deinit(phy->rx->ch_filt);
             corr_deinit(phy->rx->corr);
             pnorm_deinit(phy->rx->pnorm);
-            free(phy->rx->in_samples);
+            free(phy->rx->in_samples[0]);
+            free(phy->rx->in_samples[1]);
             free(phy->rx->filt_samples);
             free(phy->rx->pnorm_samples);
             free(phy->rx->est_power);
@@ -817,11 +826,14 @@ void *phy_receive_frames(void *arg)
 {
     struct phy_handle      *phy = (struct phy_handle *) arg;
     int                     status;
+    bool                    samp_buf_sel;   //Buffer select for phy->rx->in_samples
     unsigned int            num_bytes_rx;
-    unsigned int            data_index; //Current index of rx_buffer to receive new bytes
+    unsigned int            data_idx;   //Current index of rx_buffer to receive new bytes
                                         //on. doubles as the current received frame length
-    uint64_t                samples_index=0;    //Current index of samples buffer to 
+    uint64_t                samp_buf_idx;       //Current index of samples buffer to 
                                                 //correlate/demod samples from
+    uint64_t                samp_idx;           //Total running samples index/timestamp
+    uint64_t                corr_samp_idx;      //correlator output index/timestamp
     bool                    preamble_detected;
     bool                    new_frame;
     bool                    checked_frame_type;     //have we checked frame type yet?
@@ -829,8 +841,9 @@ void *phy_receive_frames(void *arg)
     uint8_t                *rx_buffer    = NULL;    //local rx data buffer
     uint8_t                 frame_type;
     struct bladerf_metadata metadata;               //bladerf metadata for sync_rx()
-    unsigned int            num_bytes_to_demod = 0;
-    unsigned int            num_samples_rx_act = 0; //actual number of samples RX'd
+    unsigned int            num_bytes_to_demod    = 0;
+    //actual number of samples RX'd into each in_samples[x] buffer
+    unsigned int            num_samples_rx_act[2] = {0, 0};
     #ifndef SYNC_NO_METADATA
         uint64_t            timestamp = UINT64_MAX;
     #endif
@@ -843,8 +856,9 @@ void *phy_receive_frames(void *arg)
     unsigned int            noise_est_pwr_idx  = 0;
     bool                    waiting_on_snr_est = false;
     unsigned long           frame_cnt          = 0;
-    unsigned long           all_samples_idx    = 0;
+
     int                     num_samples_processed;  //num samps processed by fsk_demod())
+    bool                    already_rxd_next_buf = false;
     bool                    enable_snr_est;
 
     enum states {RECEIVE, PREAMBLE_CORRELATE, DEMOD, CHECK_FRAME_TYPE, DECODE, ESTIMATE_SNR,
@@ -860,6 +874,31 @@ void *phy_receive_frames(void *arg)
         enable_snr_est = true;
     #else
         enable_snr_est = false;
+    #endif
+
+    #ifdef RX_SAMPLES_FROM_FILE
+        //Open RX input samples file
+        FILE                 *in_samples_file = NULL;
+        char                  filename[18+BLADERF_SERIAL_LENGTH];
+        struct bladerf_serial sn;
+        size_t                nread;
+        size_t                nsamp;
+
+        status = bladerf_get_serial_struct(phy->dev, &sn);
+        if (status != 0){
+            ERROR("Failed to get serial number: %s\n", bladerf_strerror(status));
+            goto out;
+        }
+        snprintf(filename, sizeof(filename), "in_rx_samples_%s.bin", sn.serial);
+
+        in_samples_file = fopen(filename, "rb");
+        if (in_samples_file == NULL){
+            ERROR("Failed to open RX input samples file '%s' for reading: %s\n",
+                   filename, strerror(errno));
+            goto out;
+        }
+        NOTE("Reading RX input samples from %s instead of using bladerf_sync_rx()\n",
+             filename);
     #endif
 
     //Allocate memory for buffer
@@ -879,73 +918,101 @@ void *phy_receive_frames(void *arg)
     DEBUG_MSG("RX: Pnorm settle time = %d samples\n", pnorm_settle_time);
 
     preamble_detected = false;
-    data_index        = 0;
+    data_idx          = 0;
+    samp_idx          = 0;
+    samp_buf_sel      = 0;
     state             = RECEIVE;
     //Loop until stop signal detected
     while(!phy->rx->stop){
         switch(state){
             case RECEIVE:
                 //--Receive samples, filter, and power normalize
-                //DEBUG_MSG("RX: State = RECEIVE\n");
-                samples_index    = 0;
-                all_samples_idx += num_samples_rx_act;
-                status = bladerf_sync_rx(phy->dev, phy->rx->in_samples, NUM_SAMPLES_RX,
-                                         &metadata, 5000);
-                if (status != 0){
-                    ERROR("RX: %s: Couldn't receive samples from bladeRF: %s\n",
-                          __FUNCTION__, bladerf_strerror(status));
-                    goto out;
-                }
-                #ifdef SYNC_NO_METADATA
-                    num_samples_rx_act = NUM_SAMPLES_RX;
-                #else
-                    //Check metadata
-                    if (metadata.status & BLADERF_META_STATUS_OVERRUN){
-                        NOTE("RX: %s: Got an overrun. Expected count = %u; actual count = %u.\n",
-                             __FUNCTION__, NUM_SAMPLES_RX, metadata.actual_count);
-                        phy->rx->overrun = true;
-                    }
-                    num_samples_rx_act = metadata.actual_count;
-                    if (timestamp != UINT64_MAX && metadata.timestamp != timestamp+NUM_SAMPLES_RX){
-                        NOTE("RX: %s: Unexpected timestamp. Expected %lu, got %lu.\n",
-                             __FUNCTION__, timestamp+NUM_SAMPLES_RX, metadata.timestamp);
-                    }
-                    timestamp = metadata.timestamp;
-                #endif
-
-                #ifndef BYPASS_RX_CHANNEL_FILTER
-                    // Apply channel filter
-                    fir_process(phy->rx->ch_filt, phy->rx->in_samples,
-                                phy->rx->filt_samples, num_samples_rx_act);
-                #else
-                    conv_samples_to_struct(phy->rx->in_samples, num_samples_rx_act,
-                                           phy->rx->filt_samples);
-                #endif
-                //Power normalize
-                #ifndef BYPASS_RX_PNORM
-                    pnorm(phy->rx->pnorm, num_samples_rx_act, phy->rx->filt_samples,
-                          phy->rx->pnorm_samples, phy->rx->est_power, NULL);
-                #else
-                    memcpy(phy->rx->pnorm_samples, phy->rx->filt_samples,
-                           num_samples_rx_act * sizeof(struct complex_sample));
-                #endif
-
-                #ifdef LOG_RX_SAMPLES
-                    #ifdef LOG_RX_SAMPLES_USE_PNORM
-                        //Write filtered+power normalized samples out to binary file
-                        nwritten = fwrite((int16_t *)phy->rx->pnorm_samples, sizeof(int16_t),
-                                          num_samples_rx_act*2, phy->rx->samples_file);
+                // DEBUG_MSG("RX: State = RECEIVE, samp_idx = %lu\n", samp_idx);
+                samp_buf_idx = 0;
+                if (!already_rxd_next_buf){
+                    //Did not already receive/filter the next buffer of samples
+                    //Receive more samples
+                    #ifdef RX_SAMPLES_FROM_FILE
+                        //Read input samples from file
+                        nread = fread(phy->rx->in_samples[samp_buf_sel],
+                                      sizeof(phy->rx->in_samples[0][0]), NUM_SAMPLES_RX*2,
+                                      in_samples_file);
+                        if (nread == 0){
+                            //EOF
+                            NOTE("Reached end of RX input samples file %s. Stopping receiver\n",
+                                 filename);
+                            goto out;
+                        }
+                        if (nread < NUM_SAMPLES_RX*2){
+                            NOTE("Only read %lu samples from file instead of %u\n", nread/2,
+                                 NUM_SAMPLES_RX);
+                        }
+                        num_samples_rx_act[samp_buf_sel] = nread/2;
                     #else
-                        //Write raw samples out to binary file
-                        nwritten = fwrite(phy->rx->in_samples, sizeof(int16_t),
-                                          num_samples_rx_act*2, phy->rx->samples_file);
+                        status = bladerf_sync_rx(phy->dev, phy->rx->in_samples[samp_buf_sel], 
+                                                 NUM_SAMPLES_RX, &metadata, 5000);
+                        if (status != 0){
+                            ERROR("RX: %s: Couldn't receive samples from bladeRF: %s\n",
+                                  __FUNCTION__, bladerf_strerror(status));
+                            goto out;
+                        }
+                        #ifdef SYNC_NO_METADATA
+                            num_samples_rx_act[samp_buf_sel] = NUM_SAMPLES_RX;
+                        #else
+                            //Check metadata
+                            if (metadata.status & BLADERF_META_STATUS_OVERRUN){
+                                NOTE("RX: %s: Got an overrun. Expected count = %u; actual count = %u.\n",
+                                     __FUNCTION__, NUM_SAMPLES_RX, metadata.actual_count);
+                                phy->rx->overrun = true;
+                            }
+                            num_samples_rx_act[samp_buf_sel] = metadata.actual_count;
+                            if (timestamp != UINT64_MAX && metadata.timestamp != timestamp+NUM_SAMPLES_RX){
+                                NOTE("RX: %s: Unexpected timestamp. Expected %lu, got %lu.\n",
+                                     __FUNCTION__, timestamp+NUM_SAMPLES_RX, metadata.timestamp);
+                            }
+                            timestamp = metadata.timestamp;
+                        #endif
                     #endif
-                    if (nwritten != (size_t)(num_samples_rx_act*2)){
-                        ERROR("Failed to write all samples to RX debug file: %s\n",
-                              strerror(errno));
-                        goto out;
-                    }
-                #endif
+
+                    #ifndef BYPASS_RX_CHANNEL_FILTER
+                        // Apply channel filter
+                        fir_process(phy->rx->ch_filt, phy->rx->in_samples[samp_buf_sel],
+                                    phy->rx->filt_samples, num_samples_rx_act[samp_buf_sel]);
+                    #else
+                        conv_samples_to_struct(phy->rx->in_samples[samp_buf_sel],
+                                               num_samples_rx_act[samp_buf_sel],
+                                               phy->rx->filt_samples);
+                    #endif
+                    #ifndef BYPASS_RX_PNORM
+                        //Power normalize
+                        pnorm(phy->rx->pnorm, num_samples_rx_act[samp_buf_sel],
+                              phy->rx->filt_samples, phy->rx->pnorm_samples,
+                              phy->rx->est_power, NULL);
+                    #else
+                        memcpy(phy->rx->pnorm_samples, phy->rx->filt_samples,
+                               num_samples_rx_act[samp_buf_sel] * sizeof(struct complex_sample));
+                    #endif
+
+                    #ifdef LOG_RX_SAMPLES
+                        #ifdef LOG_RX_SAMPLES_USE_PNORM
+                            //Write filtered+power normalized samples out to binary file
+                            nwritten = fwrite((int16_t *)phy->rx->pnorm_samples, sizeof(int16_t),
+                                              num_samples_rx_act[samp_buf_sel]*2,
+                                              phy->rx->samples_file);
+                        #else
+                            //Write raw samples out to binary file
+                            nwritten = fwrite(phy->rx->in_samples[samp_buf_sel], sizeof(int16_t),
+                                              num_samples_rx_act[samp_buf_sel]*2,
+                                              phy->rx->samples_file);
+                        #endif
+                        if (nwritten != (size_t)(num_samples_rx_act[samp_buf_sel]*2)){
+                            ERROR("Failed to write all samples to RX debug file: %s\n",
+                                  strerror(errno));
+                            goto out;
+                        }
+                    #endif
+                }
+                already_rxd_next_buf = false;
 
                 if (preamble_detected){
                     next_state = DEMOD;
@@ -965,14 +1032,28 @@ void *phy_receive_frames(void *arg)
             case PREAMBLE_CORRELATE:
                 //--Cross correlate received samples with preamble to find start
                 //--of the data frame
-                //DEBUG_MSG("RX: State = PREAMBLE_CORRELATE\n");
-                samples_index = corr_process(phy->rx->corr,
-                                             &(phy->rx->pnorm_samples[samples_index]),
-                                             (size_t) (num_samples_rx_act-samples_index),
-                                             samples_index);
-                if (samples_index != CORRELATOR_NO_RESULT){
-                    DEBUG_MSG("RX: Preamble matched @ buf index %lu (all samp index = %lu)\n",
-                              samples_index, all_samples_idx+samples_index);
+                // DEBUG_MSG("RX: State = PREAMBLE_CORRELATE\n");
+                corr_samp_idx =
+                    corr_process(phy->rx->corr, &(phy->rx->pnorm_samples[samp_buf_idx]),
+                                 (size_t) (num_samples_rx_act[samp_buf_sel]-samp_buf_idx),
+                                 samp_idx);
+                if (corr_samp_idx != CORRELATOR_NO_RESULT){
+                    //Detected a frame
+                    if (corr_samp_idx < samp_idx){
+                        //Reported peak is in the previous buffer - corner case where we
+                        //ran out of samples before the correlator's countdown finished.
+                        //Switch to previous buffer, backtrack samp_idx, and indicate that
+                        //we've already RX'd the samples for the subsequent buffer
+                        DEBUG_MSG("RX: Correlator reported match is in previous buffer. "
+                                  "Switching ping/pong buffer back to previous buffer.\n");
+                        samp_buf_sel         = !samp_buf_sel;
+                        samp_idx            -= num_samples_rx_act[samp_buf_sel];
+                        already_rxd_next_buf = true;
+                    }
+                    samp_buf_idx = corr_samp_idx - samp_idx;
+
+                    DEBUG_MSG("RX: Preamble matched @ samp idx %lu (buffer samp idx = %lu)\n",
+                              corr_samp_idx, samp_buf_idx);
                     preamble_detected  = true;
                     new_frame          = true;
                     checked_frame_type = false;
@@ -986,11 +1067,11 @@ void *phy_receive_frames(void *arg)
                     }
                     //store the current power estimate (at start of data) as S+N power
                     //at this point the power estimate has settled from training+preamble
-                    signoise_est_pwr   = phy->rx->est_power[samples_index];
+                    signoise_est_pwr   = phy->rx->est_power[samp_buf_idx];
 
                     //First we only demod the first byte to determine frame type
                     num_bytes_to_demod = 1;
-                    data_index         = 0;
+                    data_idx           = 0;
                     state              = DEMOD;
                 }else{
                     //No preamble match. Receive more samples
@@ -1000,10 +1081,10 @@ void *phy_receive_frames(void *arg)
             case DEMOD:
                 //--Demod samples
                 DEBUG_MSG("RX: State = DEMOD\n");
-                num_bytes_rx = fsk_demod(phy->fsk, &(phy->rx->pnorm_samples[samples_index]),
-                                         num_samples_rx_act-(int)samples_index, new_frame,
-                                         num_bytes_to_demod, &rx_buffer[data_index],
-                                         &num_samples_processed);
+                num_bytes_rx = fsk_demod(phy->fsk, &(phy->rx->pnorm_samples[samp_buf_idx]),
+                                         num_samples_rx_act[samp_buf_sel]-(int)samp_buf_idx,
+                                         new_frame, num_bytes_to_demod,
+                                         &rx_buffer[data_idx], &num_samples_processed);
                 if (num_bytes_rx < num_bytes_to_demod){
                     //Receive more samples
                     num_bytes_to_demod -= num_bytes_rx;
@@ -1017,8 +1098,8 @@ void *phy_receive_frames(void *arg)
                         state = DECODE;
                     }
                 }
-                data_index    += num_bytes_rx;
-                samples_index += num_samples_processed;
+                data_idx      += num_bytes_rx;
+                samp_buf_idx  += num_samples_processed;
                 new_frame      = false;
                 break;
             case CHECK_FRAME_TYPE:
@@ -1040,7 +1121,7 @@ void *phy_receive_frames(void *arg)
                 }else{
                     NOTE("RX: Received unknown frame type 0x%02X. Dropping this frame.\n",
                          frame_type);
-                    data_index        = 0;
+                    data_idx          = 0;
                     preamble_detected = false;
                     state             = PREAMBLE_CORRELATE;
                     break;
@@ -1074,15 +1155,15 @@ void *phy_receive_frames(void *arg)
                 //frame
                 if (!waiting_on_snr_est){
                     //Prepare new SNR estimate after frame ended
-                    //samples_index is now at the end of frame, at start of ramp down
+                    //samp_buf_idx is now at the end of frame, at start of ramp down
                     //post-frame samples index to use for noise estimate:
-                    noise_est_pwr_idx  = samples_index + RAMP_LENGTH +
+                    noise_est_pwr_idx  = samp_buf_idx + RAMP_LENGTH +
                                          DC_OFF_SETTLE_TIME + pnorm_settle_time;
                 }
 
-                if (noise_est_pwr_idx >= num_samples_rx_act){
+                if (noise_est_pwr_idx >= num_samples_rx_act[samp_buf_sel]){
                     //need to receive more samples before we can obtain our noise estimate
-                    noise_est_pwr_idx -= num_samples_rx_act;
+                    noise_est_pwr_idx -= num_samples_rx_act[samp_buf_sel];
                     waiting_on_snr_est = true;
                 }else{
                     //Have everything needed; compute SNR estimate
@@ -1137,9 +1218,21 @@ void *phy_receive_frames(void *arg)
                 ERROR("%s: Invalid state\n", __FUNCTION__);
                 goto out;
         }
+        //Do some things based on the next state, before the next state machine cycle
+        if (state == RECEIVE){
+            samp_idx    += num_samples_rx_act[samp_buf_sel];
+            samp_buf_sel = !samp_buf_sel;
+        }
     }
     out:
-        free(rx_buffer);
+        #ifdef RX_SAMPLES_FROM_FILE
+            if (in_samples_file != NULL){
+                fclose(in_samples_file);
+            }
+        #endif
+        if (rx_buffer != NULL){
+            free(rx_buffer);
+        }
         return NULL;
 }
 

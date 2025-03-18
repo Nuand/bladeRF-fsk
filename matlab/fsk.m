@@ -283,8 +283,10 @@ if ~no_rx
    figure('position', [0 0 960 200]);
    plot(abs(rx_info.preamble_corr).^2); hold on;
    plot([1, length(rx_info.preamble_corr)], repmat(rx_info.corr_thresh, 1, 2), '--r');
+   corr_peak_idx = (rx_info.sig_start_idx - 1)/dec_factor + 1;
+   plot(corr_peak_idx, abs(rx_info.preamble_corr(corr_peak_idx)).^2, '*');
    title('RX cross correlation with preamble (power)');
-   legend('correlation power', 'threshold');
+   legend('correlation power', 'threshold', 'peak');
 
    %RX dphase (data signal only, training/preamble not included)
    if rx_info.dphase ~= -1
