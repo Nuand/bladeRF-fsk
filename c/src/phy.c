@@ -1061,8 +1061,8 @@ void *phy_receive_frames(void *arg)
 
                     //SNR estimator bookkeeping
                     if (waiting_on_snr_est){
-                        NOTE("RX: Detected another frame before we had time to get a "
-                             "stable noise power estimate. Skipping previous SNR estimate.");
+                        DEBUG_MSG("RX: Detected another frame before we had time to get a "
+                             "stable noise power estimate. Skipping previous SNR estimate.\n");
                         waiting_on_snr_est = false;
                     }
                     //store the current power estimate (at start of data) as S+N power
