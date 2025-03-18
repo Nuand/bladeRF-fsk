@@ -20,7 +20,7 @@
 
 function [bits, info] = fsk_receive(preamble_waveform, iq_signal, ...
                                     decimation_factor, samps_per_symb, ...
-                                    h, num_bytes, scrambling_seed, is_real_sig)
+                                    h, num_bytes, scrambling_seed)
 % FSK_RECEIVE Demodulate/receive data bits from an FSK baseband IQ signal.
 % Correlates the iq_signal with the given preamble waveform to find the
 % start of the data signal
@@ -44,10 +44,6 @@ function [bits, info] = fsk_receive(preamble_waveform, iq_signal, ...
 %    SCRAMBLING_SEED the unsigned 64 bit seed used to create descrambling sequence. Must
 %    match scrambling seed on the TX side for proper descrambling. Leave empty [] to
 %    bypass descrambling.
-%
-%    IS_REAL_SIG Set to 1 if the signal is sampled over the air using a bladeRF, for more
-%    accurate SNR estimation which adds additional settling time to the post-frame noise
-%    estimate to account for extra delay from DC offset IIR filters
 %
 %    BITS is an Nx8 matrix of received bits. Each bit element in
 %    the matrix is a char which can either be '1' or '0'. Each row of the
@@ -79,9 +75,6 @@ info = struct('iq_filt_norm' , -1, ...
               'dphase'       , -1, ...
               'sig_start_idx', -1, ...
               'dphase_sym'   , -1);
-
-%num samples for DC offset to settle to 0 after a frame (bladeRF 2)
-dc_off_settle_time = 30e3;
 
 corr_peak_thresh = 0.5625 * (length(preamble_waveform)/decimation_factor)^2;
 info.corr_thresh = corr_peak_thresh;
@@ -133,25 +126,31 @@ info.sig_start_idx = sig_start_idx;
 
 %(S+N) power: Use est_power at frame data start. At this point, the training sequence and
 %and preamble have come through, so est_power has had time to stabilize.
-signoise_est_pwr = est_power(sig_start_idx);
-%N power: Use est_power after end of frame
-%frame end index: after all bytes and ramp down. +1 for setting init phase
-frame_end_idx    = sig_start_idx + 1 + num_bytes*8*samps_per_symb + samps_per_symb;
-%est_power noise index: add time for DC offset and pnorm IIR filters to settle
-noise_est_idx    = frame_end_idx + pnorm_settle_time;
-if is_real_sig
-   noise_est_idx = noise_est_idx + dc_off_settle_time;
+signoise_est_pwr = est_power(sig_start_idx)
+sig_start_idx
+%N power: Use est_power just before beginning of frame: subtract PHY header length
+training_len     = 4;
+%PHY header length: training + preamble + ramp + 1 symbol for a buffer
+phy_hdr_len      = training_len*8*samps_per_symb + length(preamble_waveform) + ...
+                   samps_per_symb + samps_per_symb
+noise_est_idx    = sig_start_idx - phy_hdr_len
+if noise_est_idx < 1
+   fprintf(2, ['%s: Not enough past samples to get pre-frame noise estimate. SNR ' ...
+               'estimate may not be accurate. Add more 0 samples to beginning of ' ...
+               'signal to fix.\n'], mfilename);
+   noise_est_idx = 1;
 end
-if noise_est_idx > length(est_power)
-   fprintf(2, ['%s: Not enough samples to allow time for noise power estimate to ' ...
-               'fully settle. SNR estimate may not be accurate. Add more 0 samples to' ...
-               ' end of signal to fix.\n'], mfilename);
-   noise_est_idx = length(est_power);
+if (training_len*8*samps_per_symb + length(preamble_waveform)) < pnorm_settle_time
+   fprintf(2, ['%s: Signal+noise power estimate will not be stable yet at start of ' ...
+               'data just after training+preamble, because pnorm settle time = %d, but ' ...
+               'training+preamble length = %d. SNR estimate may be innaccurate; suggest ' ...
+               'editing the algorithm to use later samples after pnorm has settled\n'], ...
+               pnorm_settle_time, training_len*8*samps_per_symb + length(preamble_waveform));
 end
 
-noise_est_pwr    = est_power(noise_est_idx);
-sig_est_pwr      = signoise_est_pwr - noise_est_pwr;
-snr_est_db       = 10*log10(sig_est_pwr / noise_est_pwr);
+noise_est_pwr = est_power(noise_est_idx)
+sig_est_pwr   = signoise_est_pwr - noise_est_pwr
+snr_est_db    = 10*log10(sig_est_pwr / noise_est_pwr);
 fprintf('Note: RX post-filter SNR estimate = %.2f dB\n', snr_est_db);
 
 %Demodulate bits from the IQ signal at the start index

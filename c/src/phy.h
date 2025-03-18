@@ -51,27 +51,25 @@
 #include "link.h" //for link layer frame type definitions
 
 //Training sequence which goes at the start of every frame
-#define TRAINING_SEQ {0xAA, 0xAA, 0xAA, 0xAA}
+#define TRAINING_SEQ        {0xAA, 0xAA, 0xAA, 0xAA}
 //Length of training sequence in bytes
 #define TRAINING_SEQ_LENGTH 4
 //preamble which goes after the training sequence
-#define PREAMBLE {0x2E, 0x69, 0x2C, 0xF0}
+#define PREAMBLE            {0x2E, 0x69, 0x2C, 0xF0}
 //Length of preamble in bytes
-#define PREAMBLE_LENGTH 4
+#define PREAMBLE_LENGTH     4
 //Seed for pseudorandom number sequence generator
-#define PRNG_SEED 0x0109BBA53CFFD081
+#define PRNG_SEED           0x0109BBA53CFFD081
 //Length (in samples) of ramp up/ramp down
-#define RAMP_LENGTH SAMP_PER_SYMB
+#define RAMP_LENGTH         SAMP_PER_SYMB
 //Number of samples to receive at a time from bladeRF
-#define NUM_SAMPLES_RX SYNC_BUFFER_SIZE
+#define NUM_SAMPLES_RX      SYNC_BUFFER_SIZE
 //Correlator countdown size
-#define CORR_COUNTDOWN SAMP_PER_SYMB
+#define CORR_COUNTDOWN      SAMP_PER_SYMB
 //power normalization alpha coefficient - how slowly it responds to changes in power
-#define PNORM_ALPHA 0.95f
-#define PNORM_MIN_GAIN 0.1f
-#define PNORM_MAX_GAIN 50.0f
-//time needed (in samples) for DC offset to settle to 0 after end of frame (bladerf 2)
-#define DC_OFF_SETTLE_TIME 25000
+#define PNORM_ALPHA         0.95f
+#define PNORM_MIN_GAIN      0.1f
+#define PNORM_MAX_GAIN      50.0f
 
 //DEBUG: Define this to write all RX samples out to binary file rx_samples_[serial].bin
 // #define LOG_RX_SAMPLES

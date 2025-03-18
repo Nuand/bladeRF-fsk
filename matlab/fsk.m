@@ -194,14 +194,6 @@ if ~no_tx
 
       %normalize to [-1.0, 1.0] mimicking our 12 bit limit
       rx_sig = rx_sig/max(abs(rx_sig));
-
-%      %DEBUG: estimate SNR using portion of rx_sig containing signal, comparing to noise only
-%      %we get S+N and N. S ~= (S+N) - N
-%      signoise_pwr = mean(abs(rx_sig(null_amt+1:end-null_amt)).^2)
-%      noise_pwr    = mean(abs(rx_sig([1:null_amt,end-null_amt+1:end])).^2)
-%      sig_pwr_est  = signoise_pwr - noise_pwr;
-%      snr_est      = 10*log10(sig_pwr_est / noise_pwr);
-%      fprintf('Note: SNR estimate = %.2f dB\n', snr_est);
    end
 end
 
@@ -225,7 +217,7 @@ if ~no_rx
       rx_nbytes = size(tx_bits, 1);
    end
    [rx_bits, rx_info] = fsk_receive(preamble_waveform, rx_sig, dec_factor, ...
-                                    samps_per_symb, h, rx_nbytes, scrambling_seed, use_file);
+                                    samps_per_symb, h, rx_nbytes, scrambling_seed);
 
    rx_nsym = numel(training_seq) + numel(preamble) + rx_nbytes*8;
 
