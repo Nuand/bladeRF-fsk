@@ -126,14 +126,13 @@ info.sig_start_idx = sig_start_idx;
 
 %(S+N) power: Use est_power at frame data start. At this point, the training sequence and
 %and preamble have come through, so est_power has had time to stabilize.
-signoise_est_pwr = est_power(sig_start_idx)
-sig_start_idx
+signoise_est_pwr = est_power(sig_start_idx);
 %N power: Use est_power just before beginning of frame: subtract PHY header length
 training_len     = 4;
 %PHY header length: training + preamble + ramp + 1 symbol for a buffer
 phy_hdr_len      = training_len*8*samps_per_symb + length(preamble_waveform) + ...
-                   samps_per_symb + samps_per_symb
-noise_est_idx    = sig_start_idx - phy_hdr_len
+                   samps_per_symb + samps_per_symb;
+noise_est_idx    = sig_start_idx - phy_hdr_len;
 if noise_est_idx < 1
    fprintf(2, ['%s: Not enough past samples to get pre-frame noise estimate. SNR ' ...
                'estimate may not be accurate. Add more 0 samples to beginning of ' ...
@@ -148,8 +147,8 @@ if (training_len*8*samps_per_symb + length(preamble_waveform)) < pnorm_settle_ti
                pnorm_settle_time, training_len*8*samps_per_symb + length(preamble_waveform));
 end
 
-noise_est_pwr = est_power(noise_est_idx)
-sig_est_pwr   = signoise_est_pwr - noise_est_pwr
+noise_est_pwr = est_power(noise_est_idx);
+sig_est_pwr   = signoise_est_pwr - noise_est_pwr;
 snr_est_db    = 10*log10(sig_est_pwr / noise_est_pwr);
 fprintf('Note: RX post-filter SNR estimate = %.2f dB\n', snr_est_db);
 
