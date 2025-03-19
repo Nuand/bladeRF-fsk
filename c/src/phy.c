@@ -854,11 +854,11 @@ void *phy_receive_frames(void *arg)
     uint64_t                noise_est_pwr_idx;
     unsigned int            phy_hdr_len;
     float                   signoise_est_pwr, noise_est_pwr, sig_est_pwr;
-    float                   snr_est_db;
+    float                   snr_est, snr_est_db, snr_est_avg;
+    unsigned int            num_snr_ests = 0;
     unsigned long           frame_cnt;
     int                     num_samples_processed;  //num samps processed by fsk_demod())
     bool                    already_rxd_next_buf = false;
-    bool                    enable_snr_est;
 
     #ifndef SYNC_NO_METADATA
         uint64_t            timestamp = UINT64_MAX;
@@ -874,13 +874,6 @@ void *phy_receive_frames(void *arg)
 
     //corr_process() takes a size_t count. Ensure a cast from uint64_t to size_t is valid
     assert(NUM_SAMPLES_RX < SIZE_MAX);
-
-    //enable for SNR estimator (mostly to prevent compile warnings)
-    #ifdef ENABLE_NOTES
-        enable_snr_est = true;
-    #else
-        enable_snr_est = false;
-    #endif
 
     #ifdef RX_SAMPLES_FROM_FILE
         //Open RX input samples file
@@ -928,6 +921,7 @@ void *phy_receive_frames(void *arg)
     samp_idx          = 0;
     samp_buf_sel      = 0;
     frame_cnt         = 0;
+    snr_est_avg       = 0;
     state             = RECEIVE;
     //Loop until stop signal detected
     while(!phy->rx->stop){
@@ -1062,12 +1056,8 @@ void *phy_receive_frames(void *arg)
                     data_idx           = 0;
                     next_state         = DEMOD;
 
-                    if (enable_snr_est){
-                        //Estimate SNR before moving to next state
-                        state = ESTIMATE_SNR;
-                    }else{
-                        state = next_state;
-                    }
+                    //Estimate SNR before moving to next state
+                    state = ESTIMATE_SNR;
                 }else{
                     //No preamble match. Receive more samples
                     state = RECEIVE;
@@ -1107,15 +1097,18 @@ void *phy_receive_frames(void *arg)
                 }
 
                 //Compute SNR
-                sig_est_pwr = signoise_est_pwr - noise_est_pwr;
-                if (sig_est_pwr <= 0){
+                sig_est_pwr  = signoise_est_pwr - noise_est_pwr;
+                snr_est      = sig_est_pwr/noise_est_pwr;
+                snr_est_avg += snr_est;     //add to sum in preparation for taking average
+                if (snr_est <= 0){
                     snr_est_db = -INFINITY;
                 }else{
-                    snr_est_db = 10*log10(sig_est_pwr/noise_est_pwr);
+                    snr_est_db = 10*log10(snr_est);
                 }
-                fprintf(stderr, "[PHY] RX: Post-filter SNR estimate = %.1f dB (frame %lu)\n",
-                        snr_est_db, frame_cnt);
+                NOTE("[PHY] RX: Post-filter SNR estimate = %.1f dB (frame %lu)\n",
+                     snr_est_db, frame_cnt);
 
+                num_snr_ests++;
                 state = next_state;     //Go to previously stored next state
                 break;
             case DEMOD:
@@ -1225,6 +1218,16 @@ void *phy_receive_frames(void *arg)
         }
     }
     out:
+        if (num_snr_ests > 0){
+            //Print final SNR estimate, average from all frames
+            snr_est_avg /= num_snr_ests;
+            if (snr_est_avg < 0){
+                snr_est_db = -INFINITY;
+            }else{
+                snr_est_db = 10*log10(snr_est_avg);
+            }
+            fprintf(stderr, "[PHY] RX: Average SNR = %.1f dB\n", snr_est_db);
+        }
         #ifdef RX_SAMPLES_FROM_FILE
             if (in_samples_file != NULL){
                 fclose(in_samples_file);

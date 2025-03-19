@@ -42,7 +42,7 @@
 
 #define ACK_FRAME_LENGTH 7
 #define ACK_TIMEOUT_MS 500      //Timeout to wait for an acknowledgement
-#define LINK_MAX_TRIES 3        //Maximum number of frame retransmissions before the
+#define LINK_MAX_TRIES 6        //Maximum number of frame retransmissions before the
                                 //transmitter gives up
 //Byte codes for data/ack frame type field
 #define DATA_FRAME_CODE 0x00

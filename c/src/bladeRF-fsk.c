@@ -293,8 +293,10 @@ int main(int argc, char *argv[])
         printf(
             "\n"
             "Notes:\n"
-            "  The -d option takes a device specifier string. See the bladerf_open()\n"
-            "  documentation for more information about the format of this string.\n"
+            "  -The -d option takes a device specifier string. See the bladerf_open() documentation\n"
+            "   for more information about the format of this string.\n"
+            "  -Average post-filter SNR estimate prints out when program quits. Expect to experience\n"
+            "   bit errors (causing CRC errors requiring retransmission of frames) at <14 dB SNR.\n"
             "\n"
             "Example: Text chat between two devices at 904MHz/924MHz with TX gain adjusted.\n"
             "  Device 1> bladeRF-fsk -d *:serial=4a -r 904M -t 924M --tx-gain 55\n"
