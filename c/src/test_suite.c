@@ -422,7 +422,7 @@ int phy_receive_test(char *dev_id)
     params.tx_vga1_gain    = -4;
     params.tx_vga2_gain    = 0;
     params.tx_use_unified  = true;
-    params.tx_unified_gain = 0;
+    params.tx_unified_gain = 20;
     params.tx_biastee      = false;
 
     params.rx_freq         = 924000000;
