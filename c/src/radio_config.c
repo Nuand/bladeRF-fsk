@@ -21,6 +21,7 @@
  */
 
 #include "radio_config.h"
+#include <string.h>
 
 #if defined(DEBUG_MODE) || defined(VERBOSE_MODE)
     #define DEBUG_MSG(...) fprintf(stderr, "[RADIO] " __VA_ARGS__)
@@ -137,15 +138,25 @@ static int radio_configure_module(struct bladerf *dev, struct module_config *c)
 
     }else{
         //RX gains
-        if (c->use_agc){
-            status = bladerf_set_gain_mode(dev, c->module, BLADERF_GAIN_AUTOMATIC);
-            if (status != 0){
+        if (c->use_agc) {
+            const char       *board_name = bladerf_get_board_name(dev);
+            bladerf_gain_mode agc_mode;
+            
+            if (strcmp(board_name, "bladerf2") == 0){
+                //Found that fastattack works best
+                agc_mode = BLADERF_GAIN_FASTATTACK_AGC; //bladeRF2 AGC
+            }else{
+                agc_mode = BLADERF_GAIN_DEFAULT;        //bladeRF1 AGC
+            }
+
+            status = bladerf_set_gain_mode(dev, c->module, agc_mode);
+            if (status != 0) {
                 fprintf(stderr, "Failed enable RX AGC: %s\n",
                         bladerf_strerror(status));
                 return status;
             }
         }else{
-            status = bladerf_set_gain_mode(dev, c->module, BLADERF_GAIN_MANUAL);
+            status = bladerf_set_gain_mode(dev, c->module, BLADERF_GAIN_MGC);
             if (status != 0){
                 fprintf(stderr, "Failed to disable RX AGC: %s\n",
                         bladerf_strerror(status));

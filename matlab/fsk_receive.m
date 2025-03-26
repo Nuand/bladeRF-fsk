@@ -127,18 +127,19 @@ info.sig_start_idx = sig_start_idx;
 %(S+N) power: Use est_power at frame data start. At this point, the training sequence and
 %and preamble have come through, so est_power has had time to stabilize.
 signoise_est_pwr = est_power(sig_start_idx);
-%N power: Use est_power just before beginning of frame: subtract PHY header length
-training_len     = 4;
-%PHY header length: training + preamble + ramp + 1 symbol for a buffer
-phy_hdr_len      = training_len*8*samps_per_symb + length(preamble_waveform) + ...
-                   samps_per_symb + samps_per_symb;
-noise_est_idx    = sig_start_idx - phy_hdr_len;
-if noise_est_idx < 1
-   fprintf(2, ['%s: Not enough past samples to get pre-frame noise estimate. SNR ' ...
-               'estimate may not be accurate. Add more 0 samples to beginning of ' ...
-               'signal to fix.\n'], mfilename);
-   noise_est_idx = 1;
+%N power: Use est_power after end of frame
+%frame end index: after all bytes and ramp down. +1 for setting init phase
+frame_end_idx    = sig_start_idx + 1 + num_bytes*8*samps_per_symb + samps_per_symb;
+%est_power noise index: add time for pnorm to settle, +20 for extra settling time
+noise_est_idx    = frame_end_idx + pnorm_settle_time + 20;
+if noise_est_idx > length(est_power)
+   fprintf(2, ['%s: Not enough samples to allow time for noise power estimate to ' ...
+               'fully settle. SNR estimate may not be accurate. Add more 0 samples to' ...
+               ' end of signal to fix.\n'], mfilename);
+   noise_est_idx = length(est_power);
 end
+
+training_len = 4; %training sequence length in bytes
 if (training_len*8*samps_per_symb + length(preamble_waveform)) < pnorm_settle_time
    fprintf(2, ['%s: Signal+noise power estimate will not be stable yet at start of ' ...
                'data just after training+preamble, because pnorm settle time = %d, but ' ...
