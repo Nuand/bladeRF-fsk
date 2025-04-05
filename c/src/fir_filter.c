@@ -1,5 +1,7 @@
 /**
- * @brief   Filters the input signal with the given FIR filter coefficients
+ * @brief   Filters the input signal with the given FIR filter coefficients, applying
+ *          optional downsampling when dec_factor>1. Only computes the outputs that will
+ *          not be thrown out by downsampling.
  *
  * This file is part of the bladeRF-fsk project
  *
@@ -38,9 +40,6 @@ struct fir_filter {
     float *taps;        /* Filter taps */
     size_t length;      /* Length of the filter, in taps */
 
-    /* Interpolation or decimation factor */
-    unsigned int factor;
-
     /* Insertion points into "shift register" implementation that utilizes
      * two copies of data to achieve a contiguious shifting window. */
     size_t ins1;
@@ -49,6 +48,15 @@ struct fir_filter {
     /* Filter state buffers */
     int32_t *i;
     int32_t *q;
+
+    //Decimation factor. After filtering, the output signal is downsampled by this factor
+    //to produce decimation. Filter computations intelligently avoid computing outputs
+    //that will be thrown out by downsampling.
+    unsigned int dec_factor;
+
+    //Filter output decimation phase: 0 to dec_factor-1
+    //only phase 0 outputs are computed, the rest are dropped by downsampling
+    unsigned int dec_phase;
 };
 
 static void fir_reset(struct fir_filter *filt)
@@ -60,9 +68,11 @@ static void fir_reset(struct fir_filter *filt)
         filt->q[n] = 0;
     }
 
-    /* Remember, state is 2 copies: array len is 2 * filt->length elts */
-    filt->ins1  = 0;
-    filt->ins2  = filt->length;
+    /* Remember, state is 2 copies: array len is 2 * filt->length elements */
+    filt->ins1      = 0;
+    filt->ins2      = filt->length;
+
+    filt->dec_phase = 0;
 }
 
 void fir_deinit(struct fir_filter *filt)
@@ -75,7 +85,7 @@ void fir_deinit(struct fir_filter *filt)
     }
 }
 
-struct fir_filter * fir_init(const float *taps, size_t length)
+struct fir_filter * fir_init(const float *taps, size_t length, unsigned int dec_factor)
 {
     struct fir_filter *filt;
 
@@ -108,17 +118,19 @@ struct fir_filter * fir_init(const float *taps, size_t length)
     }
 
     memcpy(filt->taps, taps, length * sizeof(filt->taps[0]));
-    filt->length = length;
+
+    filt->length     = length;
+    filt->dec_factor = dec_factor;
 
     fir_reset(filt);
     return filt;
 }
 
-void fir_process(struct fir_filter *f, int16_t *input,
-                    struct complex_sample *output, size_t count)
+unsigned int fir_process(struct fir_filter *f, int16_t *input,
+                         struct complex_sample *output, size_t count)
 {
     /* Index into input/output buffers */
-    size_t inout_idx;
+    size_t in_idx;
 
     /* Index into f->taps array */
     size_t t;
@@ -126,30 +138,38 @@ void fir_process(struct fir_filter *f, int16_t *input,
     /* Index into f->i and f->q state arrays */
     size_t s;
 
-    for (inout_idx = 0; inout_idx < (2*count); inout_idx += 2) {
-        int32_t i = input[inout_idx];
-        int32_t q = input[inout_idx+1];
-        float result_i = 0;
-        float result_q = 0;
+    //index into output
+    size_t out_idx = 0;
+
+    for (in_idx = 0; in_idx < (2*count); in_idx += 2) {
+        int32_t i        = input[in_idx];
+        int32_t q        = input[in_idx+1];
+        float   result_i = 0;
+        float   result_q = 0;
 
         /* Insert samples */
         f->i[f->ins1] = f->i[f->ins2] = i;
         f->q[f->ins1] = f->q[f->ins2] = q;
 
-        /* Convolve */
-        for (t = 0, s = f->ins2; t < f->length; t++, s--) {
-            float tmp_i, tmp_q;
 
-            tmp_i = f->taps[t] * f->i[s];
-            tmp_q = f->taps[t] * f->q[s];
+        if (f->dec_phase == 0){
+            /* Convolve */
+            for (t = 0, s = f->ins2; t < f->length; t++, s--) {
+                float tmp_i, tmp_q;
 
-            result_i += tmp_i;
-            result_q += tmp_q;
+                tmp_i = f->taps[t] * f->i[s];
+                tmp_q = f->taps[t] * f->q[s];
+
+                result_i += tmp_i;
+                result_q += tmp_q;
+            }
+
+            /* Update output sample */
+            output[out_idx].i = (int16_t) roundf(result_i);
+            output[out_idx].q = (int16_t) roundf(result_q);
+
+            out_idx++;
         }
-
-        /* Update output sample */
-        output[inout_idx/2].i = (int16_t) roundf(result_i);
-        output[inout_idx/2].q = (int16_t) roundf(result_q);
 
         /* Advance insertion points */
         f->ins2++;
@@ -159,7 +179,15 @@ void fir_process(struct fir_filter *f, int16_t *input,
         } else {
             f->ins1++;
         }
+
+        //update decimation phase
+        if (f->dec_phase == f->dec_factor-1){
+            f->dec_phase = 0;
+        }else{
+            f->dec_phase++;
+        }
     }
+    return out_idx;
 }
 
 #ifdef FIR_FILTER_TEST
@@ -173,7 +201,7 @@ int main(int argc, char *argv[])
     FILE *infile            = NULL;
     FILE *outfile           = NULL;
 
-    int16_t *inbuf = NULL, *tempbuf = NULL;
+    int16_t *inbuf = NULL;
     struct complex_sample *outbuf = NULL;
 
     struct fir_filter *filt = NULL;
@@ -205,7 +233,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    filt = fir_init(rx_ch_filter, rx_ch_filter_len);
+    filt = fir_init(rx_ch_filter, rx_ch_filter_len, 1);
     if (!filt) {
         fprintf(stderr, "Failed to allocate filter.\n");
         return EXIT_FAILURE;
@@ -213,11 +241,6 @@ int main(int argc, char *argv[])
 
     inbuf = calloc(chunk_size, 2*sizeof(int16_t));
     if (!inbuf) {
-        perror("calloc");
-        goto out;
-    }
-    tempbuf = calloc(chunk_size, 2*sizeof(int16_t));
-    if (!tempbuf) {
         perror("calloc");
         goto out;
     }
@@ -245,10 +268,8 @@ int main(int argc, char *argv[])
         done = n_read != chunk_size;
 
         fir_process(filt, inbuf, outbuf, n_read);
-        //convert
-        conv_struct_to_samples(outbuf, (unsigned int) n_read, tempbuf);
 
-        n_written = fwrite(tempbuf, 2*sizeof(int16_t), n_read, outfile);
+        n_written = fwrite((int16_t *)outbuf, 2*sizeof(int16_t), n_read, outfile);
         if (n_written != n_read) {
             fprintf(stderr, "Short write encountered. Exiting.\n");
             status = -1;
@@ -266,7 +287,6 @@ out:
     if (outfile) {
         fclose(outfile);
     }
-    free(tempbuf);
     free(inbuf);
     free(outbuf);
     fir_deinit(filt);

@@ -152,14 +152,14 @@ struct correlator *corr_init(uint8_t *syms, size_t n, unsigned int sps)
     }
 
     //generate preamble waveform
-    fsk = fsk_init();
+    fsk = fsk_init(sps*SYMB_PER_REV);
     if (fsk == NULL){
         fprintf(stderr, "Couldn't initialize FSK modulator\n");
         goto out;
     }
-    fsk_mod(fsk, syms, (int)n/8, raw_samples);
+    fsk_mod(fsk, syms, (int)n/8, sps, raw_samples);
     //Convert sc16q11 to complexf and decimate
-    for (i = 0; i < ret->len; i ++){
+    for (i = 0; i < ret->len; i++){
         ret->ref[i].real = raw_samples[i*DECIMATION_FACTOR].i/2048.0f;
         ret->ref[i].imag = raw_samples[i*DECIMATION_FACTOR].q/2048.0f;
     }

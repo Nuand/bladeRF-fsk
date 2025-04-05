@@ -18,11 +18,11 @@
 % 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 %-------------------------------------------------------------------------
 
-function [fsk_signal] = fsk_mod(bits, samps_per_symb, mod_index, initial_phase)
+function [fsk_signal] = fsk_mod(bits, sps, mod_index, initial_phase)
 % FSK_MOD Produce baseband FSK signal of the input bit stream. A '1'
 % corresponds to a positive frequency (increasing phase), while a '0'
 % corresponds to a negative frequency (decreasing phase).
-%    [FSK_SIGNAL] = fsk_mod(BITS, SAMPS_PER_SYMB, MOD_INDEX, INITIAL_PHASE)
+%    [FSK_SIGNAL] = fsk_mod(BITS, SPS, MOD_INDEX, INITIAL_PHASE)
 %
 %    BITS is an Nx8 matrix of bits to transmit. Each bit element in
 %    the matrix is a char which can either be '1' or '0'. Each row of the
@@ -38,7 +38,7 @@ function [fsk_signal] = fsk_mod(bits, samps_per_symb, mod_index, initial_phase)
 %    this bit matrix format, and bin2dec(bits) to convert a bit matrix to a
 %    string
 %
-%    SAMPS_PER_SYMB number of samples per symbol
+%    SPS number of samples per symbol
 %
 %    MOD_INDEX phase modulation index: the phase deviation per symbol
 %
@@ -49,7 +49,7 @@ function [fsk_signal] = fsk_mod(bits, samps_per_symb, mod_index, initial_phase)
 %    change in phase, so an initial phase needs to be defined)
 
 %Calculate phase change per sample
-dphase_abs = mod_index / samps_per_symb;
+dphase_abs = mod_index / sps;
 
 phase = initial_phase;        %Set initial phase
 i = 1;                        %Current samples position
@@ -66,8 +66,8 @@ for byte = 1:size(bits,1)
                         bits(byte, bit));
             continue;
         end
-        %Loop through each of the 'samps_per_symb' samples in the symbol
-        for samp = 1:samps_per_symb
+        %Loop through each of the 'sps' samples in the symbol
+        for samp = 1:sps
             phase_prev = phase;
             phase = mod(phase_prev + dphase, 2*pi);
             fsk_signal(i) = exp(1j * phase);

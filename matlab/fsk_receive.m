@@ -18,24 +18,22 @@
 % 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 %-------------------------------------------------------------------------
 
-function [bits, info] = fsk_receive(preamble_waveform, iq_signal, ...
-                                    decimation_factor, samps_per_symb, ...
-                                    h, num_bytes, scrambling_seed)
+function [bits, info] = fsk_receive(preamble_waveform, iq_signal, dec_factor, sps, h, ...
+                                    num_bytes, scrambling_seed)
 % FSK_RECEIVE Demodulate/receive data bits from an FSK baseband IQ signal.
-% Correlates the iq_signal with the given preamble waveform to find the
-% start of the data signal
-%    [BITS, INFO] = fsk_receive(PREAMBLE_WAVEFORM, IQ_SIGNAL,
-%                              SAMPS_PER_SYMB, NUM_BYTES, SCRAMBLING_SEED);
+% Correlates iq_signal with the given preamble waveform to find the start of data signal
+%    [BITS, INFO] = fsk_receive(PREAMBLE_WAVEFORM, IQ_SIGNAL, DEC_FACTOR, SPS, H,
+%                               NUM_BYTES, SCRAMBLING_SEED);
 %
-%    PREAMBLE_WAVEFORM preamble iq samples waveform to determine start of
-%    data in the the iq_signal
+%    PREAMBLE_WAVEFORM preamble iq samples waveform to determine start of data in the the
+%    iq_signal. Must already factor in decimation factor, so samples per symbol must equal
+%    SPS/DEC_FACTOR in this waveform.
 %
 %    IQ_SIGNAL baseband CPFSK signal to receive
 %
-%    DECIMATION_FACTOR amount to decimate by when performing correlation
-%    with preamble. 1 = no decimation. 2 = use every other sample.
+%    DEC_FACTOR amount to decimate by during filtering
 %
-%    SAMPS_PER_SYMB number of samples per symbol
+%    SPS number of samples per symbol in waveform BEFORE decimation
 %
 %    H modulation index used on the transmitted signal
 %
@@ -61,8 +59,7 @@ function [bits, info] = fsk_receive(preamble_waveform, iq_signal, ...
 %
 %    INFO a struct containing information to use for debug plots
 %        INFO.iq_filt_norm    = filtered + normalized IQ signal
-%        INFO.preamble_corr   = cross correlation of .iq_filt_norm and
-%                               preamble waveform
+%        INFO.preamble_corr   = cross correlation of .iq_filt_norm and preamble waveform
 %        INFO.dphase          = vector of phase changes in the .iq_filt_norm
 %        INFO.sig_start_idx   = starting index of signal in .iq_filt_norm, detected by
 %                               correlator. Start of first data symbol period.
@@ -76,38 +73,40 @@ info = struct('iq_filt_norm' , -1, ...
               'sig_start_idx', -1, ...
               'dphase_sym'   , -1);
 
-corr_peak_thresh = 0.5625 * (length(preamble_waveform)/decimation_factor)^2;
+corr_peak_thresh = 0.5625 * length(preamble_waveform)^2;
 info.corr_thresh = corr_peak_thresh;
 
-%Low pass filter the IQ signal
-passband = 1/samps_per_symb * h*2/pi;
-stopband = 1/3 * 8/samps_per_symb * h*2/pi;
+%Low pass filter the IQ signal with decimation
+passband =       1/sps * h*2/pi;
+stopband = 1/3 * 8/sps * h*2/pi;
 if (stopband < 1)
-   %Design filter
-   b         = remez(31, [0 passband stopband 1], [1 1 0 0]);
-   iq_signal = filter(b, 1, iq_signal);
+   %Design and apply decimating filter
+   b         = remez(31, [0 passband stopband 1], [1 1 0 0]).';
+   iq_signal = fir_filter_dec(iq_signal, b, dec_factor, 0, 1);
+else
+   %downsample without filter (not ideal)
+   iq_signal = iq_signal(1:dec_factor:end);
 end
+%update samples per symbol after decimation
+sps = sps/dec_factor;
 
 %Power normalize signal to roughly [-1, 1], following algorithm in C implementation
-pnorm_alpha             = 0.95;
-pnorm_min_gain          = 0.1;
-pnorm_max_gain          = 50;
+pnorm_alpha    = 0.95;
+pnorm_min_gain = 0.1;
+pnorm_max_gain = 50;
 [iq_signal,est_power,~,pnorm_settle_time] = pnorm(iq_signal, 1, pnorm_alpha, ...
                                                   pnorm_min_gain, pnorm_max_gain);
-info.iq_filt_norm       = iq_signal;
+info.iq_filt_norm = iq_signal;
 
 %Correlate input IQ signal with known preamble waveform
-%Decimate iq signal and preamble waveform
-iq_signal_dec         = iq_signal(1:decimation_factor:end);
-preamble_waveform_dec = preamble_waveform(1:decimation_factor:end);
-corr                  = xcorr(iq_signal_dec, preamble_waveform_dec);
-%remove initial 0s (from implicit zero padding of preamble_waveform_dec inside xcorr())
-num_padded_zeros      = length(iq_signal_dec) - length(preamble_waveform_dec);
-corr                  = corr(num_padded_zeros+1:end);
-info.preamble_corr    = corr;
+corr               = xcorr(iq_signal, preamble_waveform);
+%remove initial 0s (from implicit zero padding of preamble_waveform inside xcorr())
+num_padded_zeros   = length(iq_signal) - length(preamble_waveform);
+corr               = corr(num_padded_zeros+1:end);
+info.preamble_corr = corr;
 
 %Find peak in cross correlation power (i^2 + q^2)
-[peak, peak_idx] = max(abs(corr).^2);
+[peak, sig_start_idx] = max(abs(corr).^2);
 %Stop if peak does not exceed threshold (no preamble match)
 if peak < corr_peak_thresh
    fprintf(2, '%s: No preamble match in signal\n', mfilename);
@@ -115,10 +114,6 @@ if peak < corr_peak_thresh
    return;
 end
 
-%decimated iq_signal start index based on this peak
-sig_start_idx      = peak_idx;
-%Calculate the un-decimated iq_signal start index
-sig_start_idx      = (sig_start_idx-1) * decimation_factor + 1;
 info.sig_start_idx = sig_start_idx;
 
 %Estimate SNR using the power estimate in the middle of the frame (signal+noise, S+N) and
@@ -129,9 +124,10 @@ info.sig_start_idx = sig_start_idx;
 signoise_est_pwr = est_power(sig_start_idx);
 %N power: Use est_power after end of frame
 %frame end index: after all bytes and ramp down. +1 for setting init phase
-frame_end_idx    = sig_start_idx + 1 + num_bytes*8*samps_per_symb + samps_per_symb;
-%est_power noise index: add time for pnorm to settle, +20 for extra settling time
-noise_est_idx    = frame_end_idx + pnorm_settle_time + 20;
+frame_end_idx    = sig_start_idx + 1 + num_bytes*8*sps + sps;
+%est_power noise index: add time for pnorm to settle, +10 for extra settling time
+noise_est_idx    = frame_end_idx + pnorm_settle_time + 10;
+
 if noise_est_idx > length(est_power)
    fprintf(2, ['%s: Not enough samples to allow time for noise power estimate to ' ...
                'fully settle. SNR estimate may not be accurate. Add more 0 samples to' ...
@@ -140,12 +136,12 @@ if noise_est_idx > length(est_power)
 end
 
 training_len = 4; %training sequence length in bytes
-if (training_len*8*samps_per_symb + length(preamble_waveform)) < pnorm_settle_time
+if (training_len*8*sps + length(preamble_waveform)) < pnorm_settle_time
    fprintf(2, ['%s: Signal+noise power estimate will not be stable yet at start of ' ...
                'data just after training+preamble, because pnorm settle time = %d, but ' ...
                'training+preamble length = %d. SNR estimate may be innaccurate; suggest ' ...
                'editing the algorithm to use later samples after pnorm has settled\n'], ...
-               pnorm_settle_time, training_len*8*samps_per_symb + length(preamble_waveform));
+               mfilename, pnorm_settle_time, training_len*8*sps + length(preamble_waveform));
 end
 
 noise_est_pwr = est_power(noise_est_idx);
@@ -155,7 +151,7 @@ fprintf('Note: RX post-filter SNR estimate = %.2f dB\n', snr_est_db);
 
 %Demodulate bits from the IQ signal at the start index
 [bits, info.dphase, info.dphase_sym] = ...
-   fsk_demod(iq_signal(sig_start_idx:end), samps_per_symb, num_bytes);
+   fsk_demod(iq_signal(sig_start_idx:end), sps, num_bytes);
 
 if ~isempty(scrambling_seed)
    %--Descramble data bits

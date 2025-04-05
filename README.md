@@ -21,10 +21,10 @@ to analog, mixed with quadrature RF carriers, and transmitted through the air.
 Received signals are mixed with quadrature RF carriers to downconvert to baseband I/Q,
 sampled with an ADC, and sent to the host PC program over the USB connection.
 
-The physical layer code features an FIR low-pass filter, power normalization, preamble
-correlation for signal detection, CPFSK modulation/demodulation, and scrambling. The
-link layer code features framing, error detection via CRC32 checksums, and guaranteed
-delivery of frames via acknowledgements and retransmissions.
+The physical layer code features an FIR low-pass filter with decimation, power
+normalization, preamble correlation for signal detection, CPFSK modulation/demodulation,
+and scrambling. The link layer code features framing, error detection via CRC32 checksums,
+and guaranteed delivery of frames via acknowledgements and retransmissions.
 
 This project is meant to be an experimental example and should not be treated as a
 rigorous modem.

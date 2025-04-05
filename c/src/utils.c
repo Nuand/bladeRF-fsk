@@ -315,11 +315,11 @@ int create_timeout_abs(unsigned int timeout_ms, struct timespec *timeout_abs)
 #endif
 
     //Add the timeout onto the current time
-    timeout_abs->tv_sec += timeout_ms/1000;
+    timeout_abs->tv_sec  += timeout_ms/1000;
     timeout_abs->tv_nsec += (timeout_ms % 1000) * 1000000;
     //Check for overflow in nsec
     if (timeout_abs->tv_nsec >= 1000000000){
-        timeout_abs->tv_sec += timeout_abs->tv_nsec / 1000000000;
+        timeout_abs->tv_sec  += timeout_abs->tv_nsec / 1000000000;
         timeout_abs->tv_nsec %= 1000000000;
     }
 

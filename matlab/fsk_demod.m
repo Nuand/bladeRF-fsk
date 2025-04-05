@@ -18,17 +18,17 @@
 % 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 %-------------------------------------------------------------------------
 
-function [bits, dphase, dphase_tot_all] = fsk_demod(fsk_signal, samps_per_symb, num_bytes)
+function [bits, dphase, dphase_tot_all] = fsk_demod(fsk_signal, sps, num_bytes)
 % FSK_DEMOD Produce demodulated bit stream from baseband CPFSK signal
 %    Demodulated bit stream contains (nrows*ncols) bits. A '1' corresponds
 %    to a positive frequency (increasing phase) while a '0' corresponds to a
 %    negative frequency (decreasing phase).
-%    [FSK_SIGNAL] = fsk_demod(FSK_SIGNAL, SAMPS_PER_SYMB, NROWS, NCOLS)
+%    [FSK_SIGNAL] = fsk_demod(FSK_SIGNAL, SPS, NROWS, NCOLS)
 %
 %    FSK_SIGNAL is the resulting complex (IQ) FSK modulated baseband signal
 %    with real and imaginary components within the range [-1.0, 1.0].
 %
-%    SAMPS_PER_SYMB number of samples per symbol
+%    SPS number of samples per symbol
 %
 %    NUM_BYTES number of bytes to demodulate from the signal
 %
@@ -52,7 +52,7 @@ function [bits, dphase, dphase_tot_all] = fsk_demod(fsk_signal, samps_per_symb, 
 %    radians. This is what decides whether each symbol is a 0 or 1
 
 %Check to make sure the iq signal is long enough to demod 'num_bytes' bytes
-if (length(fsk_signal) < samps_per_symb*num_bytes*8)
+if (length(fsk_signal) < sps*num_bytes*8)
    fprintf(2, ['fsk_demod(): Signal is not long enough to demod the', ...
                ' desired number of bytes (%d)\n'], num_bytes);
    bits           = -1;
@@ -65,7 +65,7 @@ end
 %If total change is positive -> a 1 was sent
 %If total change is negative -> a 0 was sent
 
-dphase         = zeros(1, num_bytes*8*samps_per_symb);
+dphase         = zeros(1, num_bytes*8*sps);
 dphase_tot_all = zeros(1, num_bytes*8);;
 currPos        = 2;     %Sample index. First sample just defines initial phase
 sym            = 1;     %symbol index into dphase_tot_all
@@ -73,11 +73,11 @@ sym            = 1;     %symbol index into dphase_tot_all
 for byte = 1:num_bytes
    %Loop through 8 bits
    for bit = 8:-1:1
-      %Unwrap 1+samps_per_symb angles corresponding to these
-      %samps_per_symb samples AND the sample preceding them
-      phase      = unwrap(angle(fsk_signal(currPos-1:currPos+samps_per_symb-1)));
+      %Unwrap 1+sps angles corresponding to these
+      %sps samples AND the sample preceding them
+      phase      = unwrap(angle(fsk_signal(currPos-1:currPos+sps-1)));
       dphase_tot = 0;                %Initialize dphase_tot to 0
-      for samp = 2:samps_per_symb+1
+      for samp = 2:sps+1
          dphase_tot          = dphase_tot + (phase(samp) - phase(samp-1));
          currPos             = currPos + 1;
          dphase(currPos - 1) = phase(samp) - phase(samp-1);

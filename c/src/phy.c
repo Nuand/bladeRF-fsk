@@ -32,6 +32,7 @@
  * with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
+#include <assert.h>
 #include "phy.h"
 #include "fir_filter.h"
 #include "rx_ch_filter.h"
@@ -133,6 +134,12 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params,
         struct bladerf_serial sn;
     #endif
 
+    //Conversions between complex_sample and int16_t assume packed struct
+    if (sizeof(struct complex_sample) != 2*sizeof(int16_t)){
+        ERROR("Unexpected, unsupported padding in complex_sample structure");
+        return NULL;
+    }
+
     //------------Allocate memory for phy handle struct--------------
     //Calloc so all pointers are initialized to NULL
     phy = calloc(1, sizeof(struct phy_handle));
@@ -158,7 +165,7 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params,
     DEBUG_MSG("BladeRF initialized and configured successfully\n");
 
     //-------------------Open fsk handle------------------------
-    phy->fsk = fsk_init();
+    phy->fsk = fsk_init(SAMP_PER_SYMB*SYMB_PER_REV);
     if(phy->fsk == NULL){
         ERROR("%s: Couldn't open fsk handle\n", __FUNCTION__);
         goto error;
@@ -241,7 +248,7 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params,
         perror("[PHY] malloc");
         goto error;
     }
-    //Allocate memory for rx samples ping pong buffer
+    //Allocate memory for rx raw samples buffer
     phy->rx->in_samples = malloc(NUM_SAMPLES_RX * 2 * sizeof(phy->rx->in_samples[0]));
     if (phy->rx->in_samples == NULL){
         perror("[PHY] malloc");
@@ -249,33 +256,36 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params,
     }
 
     //Allocate memory for filtered RX samples
-    phy->rx->filt_samples = malloc(NUM_SAMPLES_RX * sizeof(struct complex_sample));
+    phy->rx->filt_samples = malloc(NUM_SAMPLES_RX/RX_DEC_FACT *
+                                   sizeof(struct complex_sample));
     if (phy->rx->filt_samples == NULL){
         perror("[PHY] malloc");
         goto error;
     }
 
     //Allocate memory for power normalized samples ping pong buffer
-    phy->rx->pnorm_samples[0] = malloc(NUM_SAMPLES_RX * sizeof(phy->rx->pnorm_samples[0][0]));
+    phy->rx->pnorm_samples[0] = malloc(NUM_SAMPLES_RX/RX_DEC_FACT *
+                                       sizeof(struct complex_sample));
     if (phy->rx->pnorm_samples[0] == NULL){
         perror("[PHY] malloc");
         goto error;
     }
-    phy->rx->pnorm_samples[1] = malloc(NUM_SAMPLES_RX * sizeof(phy->rx->pnorm_samples[0][0]));
+    phy->rx->pnorm_samples[1] = malloc(NUM_SAMPLES_RX/RX_DEC_FACT *
+                                       sizeof(struct complex_sample));
     if (phy->rx->pnorm_samples[1] == NULL){
         perror("[PHY] malloc");
         goto error;
     }
 
     //Allocate memory for power estimate vector
-    phy->rx->est_power = malloc(NUM_SAMPLES_RX * sizeof(phy->rx->est_power[0]));
+    phy->rx->est_power = malloc(NUM_SAMPLES_RX/RX_DEC_FACT * sizeof(phy->rx->est_power[0]));
     if (phy->rx->est_power == NULL){
         perror("[PHY] malloc");
         goto error;
     }
 
     // Create RX Channel Filter
-    phy->rx->ch_filt = fir_init(rx_ch_filter, rx_ch_filter_len);
+    phy->rx->ch_filt = fir_init(rx_ch_filter, rx_ch_filter_len, RX_DEC_FACT);
     if (phy->rx->ch_filt == NULL) {
         ERROR("%s: Failed to create channel filter.\n", __FUNCTION__);
         goto error;
@@ -289,7 +299,7 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params,
     }
 
     //Create RX correlator
-    phy->rx->corr = corr_init(preamble, 8*PREAMBLE_LENGTH, SAMP_PER_SYMB);
+    phy->rx->corr = corr_init(preamble, 8*PREAMBLE_LENGTH, SAMP_PER_SYMB/RX_DEC_FACT);
     if (phy->rx->corr == NULL){
         ERROR("%s: Couldn't initialize correlator\n", __FUNCTION__);
         goto error;
@@ -297,7 +307,7 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params,
 
     //Initialize control variables
     phy->rx->buf_filled = false;
-    phy->rx->stop = false;
+    phy->rx->stop       = false;
     //Initialize pthread condition variable for buf_filled
     status = pthread_cond_init(&(phy->rx->buf_filled_cond), NULL);
     if (status != 0){
@@ -329,7 +339,7 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params,
     #endif
 
     //-----------------Load scrambling sequence--------------------
-    prng_seed = PRNG_SEED;
+    prng_seed                = PRNG_SEED;
     phy->scrambling_sequence = prng_fill(&prng_seed, max_frame_size);
     if (phy->scrambling_sequence == NULL){
         ERROR("%s: Couldn't load scrambling sequence\n", __FUNCTION__);
@@ -496,14 +506,14 @@ int phy_fill_tx_buf(struct phy_handle *phy, uint8_t *data_buf, unsigned int leng
     memcpy(&(phy->tx->data_buf[TRAINING_SEQ_LENGTH+PREAMBLE_LENGTH]), data_buf, length);
     //Set the data length
     phy->tx->data_length = length;
-    //Mark the buffer filled
-    phy->tx->buf_filled = true;
-    //Signal the buffer filled condition
+
+    //Mark buffer filled and signal the buffer filled condition
     status = pthread_mutex_lock(&(phy->tx->buf_status_lock));
     if (status != 0){
         ERROR("%s: Error locking pthread_mutex\n", __FUNCTION__);
         return -1;
     }
+    phy->tx->buf_filled = true;
     status = pthread_cond_signal(&(phy->tx->buf_filled_cond));
     if (status != 0){
         ERROR("%s: Error signaling pthread_cond\n", __FUNCTION__);
@@ -533,16 +543,10 @@ void *phy_transmit_frames(void *arg)
     int                     num_mod_samples, num_samples;
     bool                    failed = false;
     struct bladerf_metadata metadata;
-    int16_t                *out_samples_raw = NULL;
+    int16_t                *out_samples_raw;
     #ifdef LOG_TX_SAMPLES
         size_t nwritten;
     #endif
-
-    out_samples_raw = malloc(phy->tx->max_num_samples * 2 * sizeof(int16_t));
-    if (out_samples_raw == NULL){
-        perror("[PHY] malloc");
-        goto out;
-    }
 
     //Set field(s) in bladerf metadata struct
     memset(&metadata, 0, sizeof(metadata));
@@ -568,15 +572,15 @@ void *phy_transmit_frames(void *arg)
                 break;
             }
         }
-        //Unlock mutex
-        status = pthread_mutex_unlock(&(phy->tx->buf_status_lock));
-        if (status != 0){
-            ERROR("%s: Mutex unlock failed: %s\n", __FUNCTION__, strerror(status));
-            failed = true;
-        }
         //Stop thread if stop variable is true, or something with pthreads went wrong
         if (phy->tx->stop || failed){
             phy->tx->buf_filled = false;
+            //Unlock mutex
+            status = pthread_mutex_unlock(&(phy->tx->buf_status_lock));
+            if (status != 0){
+                ERROR("%s: Mutex unlock failed: %s\n", __FUNCTION__, strerror(status));
+                failed = true;
+            }
             goto out;
         }
         //------------Transmit the frame-------------
@@ -606,9 +610,16 @@ void *phy_transmit_frames(void *arg)
         //modulate samples - leave space for ramp up/ramp down in the samples buffer
         num_mod_samples = fsk_mod(phy->fsk, phy->tx->data_buf,
                             TRAINING_SEQ_LENGTH + PREAMBLE_LENGTH + phy->tx->data_length,
-                            &(phy->tx->samples[RAMP_LENGTH]));
+                            SAMP_PER_SYMB, &(phy->tx->samples[RAMP_LENGTH]));
         //Mark the buffer empty
         phy->tx->buf_filled = false;
+
+        //Unlock mutex now that we have marked the buffer empty
+        status = pthread_mutex_unlock(&(phy->tx->buf_status_lock));
+        if (status != 0){
+            ERROR("%s: Mutex unlock failed: %s\n", __FUNCTION__, strerror(status));
+            failed = true;
+        }
 
         #ifdef TX_DC_TONE
             for (int i = 0; i < num_samples; i++){
@@ -621,11 +632,14 @@ void *phy_transmit_frames(void *arg)
         ramp_down_index = RAMP_LENGTH+num_mod_samples;
         create_ramps(RAMP_LENGTH, phy->tx->samples[ramp_down_index-1], phy->tx->samples,
                      &(phy->tx->samples[ramp_down_index]));
-        //Convert samples
-        conv_struct_to_samples(phy->tx->samples, num_samples, out_samples_raw);
+        //Convert struct complex_sample to int16_t
+        //This simple cast works fine because the struct is packed: int16_t I, int16_t Q
+        out_samples_raw = (int16_t *) phy->tx->samples;
+
         #ifdef LOG_TX_SAMPLES
             //Write samples out to binary file
-            nwritten = fwrite(out_samples_raw, sizeof(int16_t), num_samples*2, phy->tx->samples_file);
+            nwritten = fwrite(out_samples_raw, sizeof(int16_t), num_samples*2,
+                              phy->tx->samples_file);
             if (nwritten != (size_t)(num_samples*2)){
                 ERROR("Failed to write all samples to TX debug file: %s\n",
                       strerror(errno));
@@ -643,7 +657,6 @@ void *phy_transmit_frames(void *arg)
     }
 
 out:
-    free(out_samples_raw);
     return NULL;
 }
 
@@ -830,11 +843,12 @@ void *phy_receive_frames(void *arg)
     unsigned int            num_bytes_rx;
     unsigned int            data_idx;   //Current index of rx_buffer to receive new bytes
                                         //on. doubles as the current received frame length
-    uint64_t                samp_buf_idx;       //Current index of pnorm samples buffer to 
-                                                //correlate/demod samples from
-    uint64_t                samp_idx;           //Total running samples index/timestamp.
-                                                //Marks the 1st sample in current buffer
-    uint64_t                corr_samp_idx;      //correlator output index/timestamp
+    uint64_t                samp_buf_idx;   //Current index of pnorm samples buffer to 
+                                            //correlate/demod samples from
+    uint64_t                samp_idx;       //Total running samples index/timestamp, after
+                                            //decimation. Marks the 1st sample in current
+                                            //buffer
+    uint64_t                corr_samp_idx;          //correlator output index/timestamp
     bool                    preamble_detected;
     bool                    new_frame;
     bool                    checked_frame_type;     //have we checked frame type yet?
@@ -843,8 +857,10 @@ void *phy_receive_frames(void *arg)
     uint8_t                 frame_type;
     struct bladerf_metadata metadata;               //bladerf metadata for sync_rx()
     unsigned int            num_bytes_to_demod;
-    //actual number of samples RX'd into each in_samples buffer
-    unsigned int            num_samples_rx_act[2];
+    //actual number of samples RX'd from bladerf_sync_rx()
+    unsigned int            num_samples_rx_act;
+    //actual number of samples output from FIR filter post decimation into each buffer
+    unsigned int            num_samples_rx_dec[2];
     uint64_t                noise_est_pwr_idx = 0;
     float                   signoise_est_pwr, noise_est_pwr, sig_est_pwr;
     float                   snr_est, snr_est_db, snr_est_avg;
@@ -852,7 +868,7 @@ void *phy_receive_frames(void *arg)
     bool                    waiting_on_snr_est;
     int                     pnorm_settle_time;
     unsigned long           frame_cnt;
-    int                     num_samples_processed;  //num samps processed by fsk_demod())
+    int                     num_samples_proc;  //num samps processed by fsk_demod())
     bool                    already_rxd_next_buf;
 
     #ifndef SYNC_NO_METADATA
@@ -860,6 +876,9 @@ void *phy_receive_frames(void *arg)
     #endif
     #ifdef LOG_RX_SAMPLES
         size_t              nwritten;
+    #endif
+    #ifdef BYPASS_RX_CHANNEL_FILTER
+        unsigned int        dec_phase = 0;  //decimation phase tracker
     #endif
 
     enum states {RECEIVE, PREAMBLE_CORRELATE, DEMOD, CHECK_FRAME_TYPE, DECODE,
@@ -944,7 +963,7 @@ void *phy_receive_frames(void *arg)
                             NOTE("Only read %lu samples from file instead of %u\n", nread/2,
                                  NUM_SAMPLES_RX);
                         }
-                        num_samples_rx_act[samp_buf_sel] = nread/2;
+                        num_samples_rx_act = nread/2;
                     #else
                         status = bladerf_sync_rx(phy->dev, phy->rx->in_samples, 
                                                  NUM_SAMPLES_RX, &metadata, 5000);
@@ -954,7 +973,7 @@ void *phy_receive_frames(void *arg)
                             goto out;
                         }
                         #ifdef SYNC_NO_METADATA
-                            num_samples_rx_act[samp_buf_sel] = NUM_SAMPLES_RX;
+                            num_samples_rx_act = NUM_SAMPLES_RX;
                         #else
                             //Check metadata
                             if (metadata.status & BLADERF_META_STATUS_OVERRUN){
@@ -962,7 +981,7 @@ void *phy_receive_frames(void *arg)
                                      __FUNCTION__, NUM_SAMPLES_RX, metadata.actual_count);
                                 phy->rx->overrun = true;
                             }
-                            num_samples_rx_act[samp_buf_sel] = metadata.actual_count;
+                            num_samples_rx_act = metadata.actual_count;
                             if (timestamp != UINT64_MAX && metadata.timestamp != timestamp+NUM_SAMPLES_RX){
                                 NOTE("RX: %s: Unexpected timestamp. Expected %lu, got %lu.\n",
                                      __FUNCTION__, timestamp+NUM_SAMPLES_RX, metadata.timestamp);
@@ -972,21 +991,35 @@ void *phy_receive_frames(void *arg)
                     #endif
 
                     #ifdef BYPASS_RX_CHANNEL_FILTER
-                        conv_samples_to_struct(phy->rx->in_samples,
-                                               num_samples_rx_act[samp_buf_sel],
-                                               phy->rx->filt_samples);
+                        //Downsample by RX_DEC_FACT without filtering (not ideal)
+                        //Also convert from raw int16_t to struct complex_sample
+                        int j = 0;  //output index
+                        for (unsigned int i = 0; i < num_samples_rx_act*2; i += 2){
+                            if (dec_phase == 0){
+                                phy->rx->filt_samples[j].i = phy->rx->in_samples[i];
+                                phy->rx->filt_samples[j].q = phy->rx->in_samples[i+1];
+                                j++;
+                            }
+                            if (dec_phase == RX_DEC_FACT){
+                                dec_phase = 0;
+                            }else{
+                                dec_phase++;
+                            }
+                        }
+                        num_samples_rx_dec[samp_buf_sel] = j;
                     #else
-                        //Apply channel filter
-                        fir_process(phy->rx->ch_filt, phy->rx->in_samples,
-                                    phy->rx->filt_samples, num_samples_rx_act[samp_buf_sel]);
+                        //Apply channel filter within built-in decimation by RX_DEC_FACT
+                        num_samples_rx_dec[samp_buf_sel] =
+                            fir_process(phy->rx->ch_filt, phy->rx->in_samples,
+                                        phy->rx->filt_samples, num_samples_rx_act);
                     #endif
 
                     #ifdef BYPASS_RX_PNORM
                         memcpy(phy->rx->pnorm_samples[samp_buf_sel], phy->rx->filt_samples,
-                               num_samples_rx_act[samp_buf_sel] * sizeof(struct complex_sample));
+                               num_samples_rx_dec[samp_buf_sel] * sizeof(struct complex_sample));
                     #else
                         //Power normalize
-                        pnorm(phy->rx->pnorm, num_samples_rx_act[samp_buf_sel],
+                        pnorm(phy->rx->pnorm, num_samples_rx_dec[samp_buf_sel],
                               phy->rx->filt_samples, phy->rx->pnorm_samples[samp_buf_sel],
                               phy->rx->est_power, NULL);
                     #endif
@@ -995,19 +1028,23 @@ void *phy_receive_frames(void *arg)
                         #ifdef LOG_RX_SAMPLES_USE_PNORM
                             //Write filtered+power normalized samples out to binary file
                             nwritten = fwrite((int16_t *)phy->rx->pnorm_samples[samp_buf_sel],
-                                              sizeof(int16_t), num_samples_rx_act[samp_buf_sel]*2,
+                                              sizeof(int16_t), num_samples_rx_dec[samp_buf_sel]*2,
                                               phy->rx->samples_file);
+                            if (nwritten != (size_t)(num_samples_rx_dec[samp_buf_sel]*2)){
+                                ERROR("Failed to write all samples to RX debug file: %s\n",
+                                      strerror(errno));
+                                goto out;
+                            }
                         #else
                             //Write raw samples out to binary file
                             nwritten = fwrite(phy->rx->in_samples, sizeof(int16_t),
-                                              num_samples_rx_act[samp_buf_sel]*2,
-                                              phy->rx->samples_file);
+                                              num_samples_rx_act*2, phy->rx->samples_file);
+                            if (nwritten != (size_t)(num_samples_rx_act*2)){
+                                ERROR("Failed to write all samples to RX debug file: %s\n",
+                                      strerror(errno));
+                                goto out;
+                            }
                         #endif
-                        if (nwritten != (size_t)(num_samples_rx_act[samp_buf_sel]*2)){
-                            ERROR("Failed to write all samples to RX debug file: %s\n",
-                                  strerror(errno));
-                            goto out;
-                        }
                     #endif
                 }
                 already_rxd_next_buf = false;
@@ -1034,7 +1071,7 @@ void *phy_receive_frames(void *arg)
                 corr_samp_idx =
                     corr_process(phy->rx->corr,
                                  &(phy->rx->pnorm_samples[samp_buf_sel][samp_buf_idx]),
-                                 (size_t) (num_samples_rx_act[samp_buf_sel]-samp_buf_idx),
+                                 (size_t) (num_samples_rx_dec[samp_buf_sel]-samp_buf_idx),
                                  samp_idx);
                 if (corr_samp_idx != CORRELATOR_NO_RESULT){
                     //Detected a frame
@@ -1046,7 +1083,7 @@ void *phy_receive_frames(void *arg)
                         DEBUG_MSG("RX: Correlator reported match is in previous buffer. "
                                   "Switching ping/pong buffer back to previous buffer.\n");
                         samp_buf_sel         = !samp_buf_sel;
-                        samp_idx            -= num_samples_rx_act[samp_buf_sel];
+                        samp_idx            -= num_samples_rx_dec[samp_buf_sel];
                         already_rxd_next_buf = true;
                     }
                     samp_buf_idx = corr_samp_idx - samp_idx;
@@ -1082,9 +1119,9 @@ void *phy_receive_frames(void *arg)
                 DEBUG_MSG("RX: State = DEMOD\n");
                 num_bytes_rx = fsk_demod(phy->fsk,
                                          &(phy->rx->pnorm_samples[samp_buf_sel][samp_buf_idx]),
-                                         num_samples_rx_act[samp_buf_sel]-(int)samp_buf_idx,
-                                         new_frame, num_bytes_to_demod,
-                                         &rx_buffer[data_idx], &num_samples_processed);
+                                         num_samples_rx_dec[samp_buf_sel]-(int)samp_buf_idx,
+                                         new_frame, num_bytes_to_demod, SAMP_PER_SYMB/RX_DEC_FACT,
+                                         &rx_buffer[data_idx], &num_samples_proc);
                 if (num_bytes_rx < num_bytes_to_demod){
                     //Receive more samples
                     num_bytes_to_demod -= num_bytes_rx;
@@ -1099,7 +1136,7 @@ void *phy_receive_frames(void *arg)
                     }
                 }
                 data_idx     += num_bytes_rx;
-                samp_buf_idx += num_samples_processed;
+                samp_buf_idx += num_samples_proc;
                 new_frame     = false;
                 break;
             case CHECK_FRAME_TYPE:
@@ -1153,16 +1190,16 @@ void *phy_receive_frames(void *arg)
                 if (!waiting_on_snr_est){
                     //Prepare new SNR estimate after frame ended
                     //samp_buf_idx is now at the end of frame, at start of ramp down.
-                    //+20 for some settling time, ideally would do +15000 to account for
+                    //+10 for some settling time, ideally would do +7000 to account for
                     //bladeRF2 DC offset IIR filter decay, but AGC can change quickly.
                     //post-frame samples buffer index to use for noise estimate:
                     noise_est_pwr_idx  = samp_buf_idx + RAMP_LENGTH +
-                                         pnorm_settle_time + 20;
+                                         pnorm_settle_time + 10;
                 }
 
-                if (noise_est_pwr_idx >= num_samples_rx_act[samp_buf_sel]){
+                if (noise_est_pwr_idx >= num_samples_rx_dec[samp_buf_sel]){
                     //need to receive more samples before we can obtain our noise estimate
-                    noise_est_pwr_idx -= num_samples_rx_act[samp_buf_sel];
+                    noise_est_pwr_idx -= num_samples_rx_dec[samp_buf_sel];
                     waiting_on_snr_est = true;
                 }else{
                     //Have everything needed; compute SNR estimate
@@ -1194,13 +1231,13 @@ void *phy_receive_frames(void *arg)
                 }else{
                     //Copy frame into rx_data_buf
                     memcpy(phy->rx->data_buf, rx_buffer, frame_length);
-                    phy->rx->buf_filled = true;
                     //Signal that the buffer is filled
                     status = pthread_mutex_lock(&(phy->rx->buf_status_lock));
                     if (status != 0){
                         ERROR("%s: Error locking pthread_mutex\n", __FUNCTION__);
                         goto out;
                     }
+                    phy->rx->buf_filled = true;
                     status = pthread_cond_signal(&(phy->rx->buf_filled_cond));
                     if (status != 0){
                         ERROR("%s: Error signaling pthread_cond\n", __FUNCTION__);
@@ -1223,7 +1260,7 @@ void *phy_receive_frames(void *arg)
         }
         //Do some things based on the next state, before the next state machine cycle
         if (state == RECEIVE){
-            samp_idx    += num_samples_rx_act[samp_buf_sel];
+            samp_idx    += num_samples_rx_dec[samp_buf_sel];
             samp_buf_sel = !samp_buf_sel;
         }
     }

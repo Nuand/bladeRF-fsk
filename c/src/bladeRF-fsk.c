@@ -136,6 +136,7 @@ void *receiver(void *arg)
     int      bytes_received;
     size_t   nwritten;
     size_t   rx_data_size;
+    int      max_timeouts;
 
     //--allocate memory for data buffer
     //Do a multiple of payload length, large enough (~2000 bytes) for efficient file writes
@@ -146,9 +147,18 @@ void *receiver(void *arg)
         return NULL;
     }
 
+    if (handle->rx.out == stdout){
+        //Set up to wait forever then return immediately after receiving first data chunk,
+        //without waiting longer for more potential data. This means there is no extra
+        //latency and the terminal will be snappy with received text messages.
+        max_timeouts = -1;
+    }else{
+        max_timeouts = 1;
+    }
+
     while(!handle->rx.stop){
         //Receive data into buffer
-        bytes_received = link_receive_data(handle->link, rx_data_size, 1, rx_data);
+        bytes_received = link_receive_data(handle->link, rx_data_size, max_timeouts, rx_data);
         if (bytes_received == 0){
             continue;
         }else if (bytes_received < 0){
@@ -255,16 +265,24 @@ void stop(struct bladerf_fsk_handle *handle)
                 fprintf(stderr, "Error joining tx thread: %s\n", strerror(status));
             }
         }
-        //Stop rx thread if on
+
+        //Stop rx thread if on and close link
         if (handle->rx.on){
             handle->rx.stop = true;
+
+            //Close the link
+            //This stops potential indefinite waiting inside link.c() receiver functions
+            //so that calls to link_receive_data() will return
+            link_close(handle->link);
+
             status = pthread_join(handle->rx.thread, NULL);
             if (status != 0){
                 fprintf(stderr, "Error joining rx thread: %s\n", strerror(status));
             }
+        }else{
+            link_close(handle->link);
         }
-        //Close the link
-        link_close(handle->link);
+
     }
     free(handle);
 }

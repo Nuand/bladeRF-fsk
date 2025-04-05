@@ -35,8 +35,7 @@
 //internal structs
 struct fsk_handle {
     struct complex_sample *sample_table;
-    int                    points_per_rev;
-    int                    samp_per_symb;
+    int                    tx_points_per_rev;
     //These variables keep track of the demodulator's state when a call to fsk_demod()
     //did not fully demodulate the last byte, meaning it needs to be called again with
     //more samples to finish demodulating that last byte
@@ -45,7 +44,7 @@ struct fsk_handle {
     uint8_t                last_byte;
     double                 last_phase;
     double                 curr_dphase_tot;
-    int                    curr_samp_index; //Current sample idx in symbol (0 - SAMP_PER_SYMB-1)
+    int                    curr_samp_index; //Current sample idx in symbol (0 - samp_per_symb-1)
     int                    curr_bit_index;
 };
 
@@ -108,7 +107,7 @@ static struct complex_sample *fsk_gen_samples_table(int points_per_rev)
 }
 
 unsigned int fsk_mod(struct fsk_handle *fsk, uint8_t *data_buf, int num_bytes,
-                     struct complex_sample *samples)
+                     int samp_per_symb, struct complex_sample *samples)
 {
 
     int samp_table_pos;     //current position in samples table
@@ -125,8 +124,8 @@ unsigned int fsk_mod(struct fsk_handle *fsk, uint8_t *data_buf, int num_bytes,
             //Check for 1
             if ( ((data_buf[byte] >> bit) & 0x01) == 0x01 ){
                 //This bit is a 1. Rotate phase CCW
-                for (samp = 0; samp < fsk->samp_per_symb; samp++){
-                    if (samp_table_pos == fsk->points_per_rev - 1){
+                for (samp = 0; samp < samp_per_symb; samp++){
+                    if (samp_table_pos == fsk->tx_points_per_rev - 1){
                         samp_table_pos = 0;
                     }else{
                         samp_table_pos += 1;    //Increment phase
@@ -137,9 +136,9 @@ unsigned int fsk_mod(struct fsk_handle *fsk, uint8_t *data_buf, int num_bytes,
                 }
             }else{
                 //This bit is a 0. Rotate phase CW
-                for (samp = 0; samp < fsk->samp_per_symb; samp++){
+                for (samp = 0; samp < samp_per_symb; samp++){
                     if (samp_table_pos == 0){
-                        samp_table_pos = fsk->points_per_rev - 1;
+                        samp_table_pos = fsk->tx_points_per_rev - 1;
                     }else{
                         samp_table_pos -= 1;    //Decrement phase
                     }
@@ -194,8 +193,8 @@ static double angle(int i, int q)
 }
 
 unsigned int fsk_demod(struct fsk_handle *fsk, struct complex_sample *samples,
-                       int num_samples, bool new_signal, int num_bytes, uint8_t *data_buf,
-                       int *num_samples_processed)
+                       int num_samples, bool new_signal, int num_bytes, int samp_per_symb,
+                       uint8_t *data_buf, int *num_samples_proc)
 {
     int    i;        //Current samples index (0 to num_samples-1)
     int    byte = 0;
@@ -222,10 +221,10 @@ unsigned int fsk_demod(struct fsk_handle *fsk, struct complex_sample *samples,
     for (byte = 0; byte != num_bytes && i < num_samples; byte++){
         //Loop through each bit in the byte
         for (bit = fsk->curr_bit_index; bit < 8; bit++){
-            //Loop through SAMP_PER_SYMB samples and their corresponding changes in phase
+            //Loop through samp_per_symb samples and their corresponding changes in phase
             //Stop if we reach the end of the samples buffer
             dphase_tot = fsk->curr_dphase_tot;
-            for (samp = fsk->curr_samp_index; (samp < fsk->samp_per_symb) && i < num_samples;
+            for (samp = fsk->curr_samp_index; (samp < samp_per_symb) && i < num_samples;
                  samp++, i++){
                 phase_prev = phase;
                 phase      = angle(samples[i].i, samples[i].q);
@@ -235,7 +234,7 @@ unsigned int fsk_demod(struct fsk_handle *fsk, struct complex_sample *samples,
                 dphase_tot += phase - phase_prev;
             }
             //Check to see if we broke out of the loop before demodulating the full bit
-            if (samp != fsk->samp_per_symb){
+            if (samp != samp_per_symb){
                 //Set demod state information
                 fsk->last_byte_demod_complete = false;
                 fsk->last_byte                = data_buf[byte];
@@ -262,11 +261,11 @@ unsigned int fsk_demod(struct fsk_handle *fsk, struct complex_sample *samples,
     }
 
     out:
-        *num_samples_processed = i;
+        *num_samples_proc = i;
         return byte;
 }
 
-struct fsk_handle *fsk_init(void)
+struct fsk_handle *fsk_init(int tx_points_per_rev)
 {
     struct fsk_handle *fsk;
 
@@ -277,10 +276,9 @@ struct fsk_handle *fsk_init(void)
         return NULL;
     }
     //Set modulation/demodulation parameters
-    fsk->samp_per_symb  = SAMP_PER_SYMB;
-    fsk->points_per_rev = POINTS_PER_REV;
+    fsk->tx_points_per_rev = tx_points_per_rev;
     //Generate the samples table
-    fsk->sample_table = fsk_gen_samples_table(POINTS_PER_REV);
+    fsk->sample_table = fsk_gen_samples_table(tx_points_per_rev);
     if (fsk->sample_table == NULL){
         fprintf(stderr, "Couldn't generate samples table\n");
         free(fsk);

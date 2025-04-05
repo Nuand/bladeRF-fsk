@@ -19,11 +19,11 @@
 %-------------------------------------------------------------------------
 
 function [iq_samples] = fsk_transmit(training_seq, preamble, data, scrambling_seed, ...
-                                     samps_per_symb, mod_index)
+                                     sps, mod_index)
 % FSK_TRANSMIT Produce a baseband FSK signal of the input binary data, with
 % a ramp up/ramp down at the beginning/end of the signal.
-%    [IQ_SAMPLES] = fsk_transmit(TRAINING_SEQ, PREAMBLE, DATA, SCRAMBLING_SEED
-%                                SAMPS_PER_SYMB, MOD_INDEX);
+%    [IQ_SAMPLES] = fsk_transmit(TRAINING_SEQ, PREAMBLE, DATA, SCRAMBLING_SEED,
+%                                SPS, MOD_INDEX);
 %
 %    TRAINING_SEQ is a matrix of training sequence bits to transmit. Format
 %    specified below.
@@ -50,7 +50,7 @@ function [iq_samples] = fsk_transmit(training_seq, preamble, data, scrambling_se
 %    SCRAMBLING_SEED the unsigned 64-bit seed used to create scrambling sequence. Leave
 %    empty [] to disable scrambling
 %
-%    SAMPS_PER_SYMB number of samples per symbol
+%    SPS number of samples per symbol
 %
 %    MOD_INDEX phase modulation index: the phase deviation per symbol
 %
@@ -59,7 +59,7 @@ function [iq_samples] = fsk_transmit(training_seq, preamble, data, scrambling_se
 %    The following shows the content and ordering of this signal:
 %    / ramp up | training_seq | preamble | data | ramp down \
 %    The ramps at the beginning/end of the signal have a length of
-%    'samps_per_symb'
+%    'sps'
 
 if ~isempty(scrambling_seed)
    %--Apply scrambling to data bits
@@ -74,27 +74,27 @@ bits = [training_seq; preamble; data];
 
 %----Construct IQ samples vector
 %-Ramp up the I samples from 0 to 1, and leave Q samples as zeros
-%Length of the ramp is 'samps_per_symb' samples
-iq_samples(1:samps_per_symb) = 1/samps_per_symb : 1/samps_per_symb: 1;
+%Length of the ramp is 'sps' samples
+iq_samples(1:sps) = 1/sps : 1/sps: 1;
 
 %Modulate the bit stream, and add to iq_samples
-sig = fsk_mod(bits, samps_per_symb, mod_index, angle(iq_samples(end)));
+sig = fsk_mod(bits, sps, mod_index, angle(iq_samples(end)));
 iq_samples(length(iq_samples)+1:length(iq_samples)+length(sig)) = sig;
 
 %-Ramp down the samples (either I or Q) to 0.
-%Length of the ramp is 'samps_per_symb' samples
+%Length of the ramp is 'sps' samples
 last_samp = iq_samples(end);
 if (real(last_samp) ~= 0)
-    rampdown_I = real(last_samp): -real(last_samp)/samps_per_symb: 0;
+    rampdown_I = real(last_samp): -real(last_samp)/sps: 0;
 else
-    rampdown_I(1:samps_per_symb+1) = 0;
+    rampdown_I(1:sps+1) = 0;
 end
 if (imag(last_samp) ~= 0)
-    rampdown_Q = imag(last_samp): -imag(last_samp)/samps_per_symb: 0;
+    rampdown_Q = imag(last_samp): -imag(last_samp)/sps: 0;
 else
-    rampdown_Q(1:samps_per_symb+1) = 0;
+    rampdown_Q(1:sps+1) = 0;
 end
-iq_samples(length(iq_samples)+1 : length(iq_samples)+samps_per_symb) = ...
-    rampdown_I(2:samps_per_symb+1) + 1j*rampdown_Q(2:samps_per_symb+1);
+iq_samples(length(iq_samples)+1 : length(iq_samples)+sps) = ...
+    rampdown_I(2:sps+1) + 1j*rampdown_Q(2:sps+1);
 
 end

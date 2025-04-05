@@ -70,6 +70,15 @@
 #define PNORM_ALPHA         0.95f
 #define PNORM_MIN_GAIN      0.1f
 #define PNORM_MAX_GAIN      50.0f
+//--FSK waveform properties
+//Set for phase modulation index = pi/2 (1/4 turn per symbol)
+//NOTE: If you change these two macros, you'll need to change the FIR channel filter as
+//well if you want the modem to work properly
+#define SAMP_PER_SYMB       8    //TX samples per symbol
+#define SYMB_PER_REV        4    //Symbols per revolution around IQ unit circle
+                                 //=2pi/modulation_index. Our modulation_index = pi/2
+//RX decimation factor after FIR filter. SAMP_PER_SYMB must be a multiple of this.
+#define RX_DEC_FACT         2
 
 //DEBUG: Define this to write all RX samples out to binary file rx_samples_[serial].bin
 // #define LOG_RX_SAMPLES

@@ -71,13 +71,15 @@ int link_send_data(struct link_handle *link, uint8_t *data, unsigned int data_le
  *
  * @param[in]   link            pointer to link handle
  * @param[in]   size            number of bytes to attempt to receive
- * @param[in]   max_timeouts    max number of 0.25 second timeouts before the function
- *                              returns
+ * @param[in]   max_timeouts    max number of 0.5 second timeouts before the function
+ *                              returns. Use -1 to wait forever and immediately return
+ *                              after receiving the first chunk of data, regardless of
+ *                              size.
  * @param[out]  data_buf        buffer to place received bytes in
  *
- * @return      number of bytes received on success, -1 on error. In the case of a
- *              timeout (i.e. when 'max_timeouts' have occured), this return value
- *              will be less than 'size'
+ * @return      number of bytes received on success, -1 on error. In the case of a timeout
+ *              (i.e. when 'max_timeouts' have occured), this return value will be less
+ *              than 'size'. Or if max_timeouts=-1, this value may be less than size.
  */
 int link_receive_data(struct link_handle *link, int size, int max_timeouts,
                       uint8_t *data_buf);

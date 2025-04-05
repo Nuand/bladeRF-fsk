@@ -33,7 +33,7 @@ struct correlator;
 #define CORRELATOR_NO_RESULT   (UINT64_MAX)
 //Amount to decimate by. If 1, no decimation will occur. If 2, the correlator will
 //use every other sample. If 3 the correlator will use every third sample. And so on.
-#define DECIMATION_FACTOR 2
+#define DECIMATION_FACTOR 1
 
 /**
  * Create a correlator. This is currently limited to symbol lengths that are

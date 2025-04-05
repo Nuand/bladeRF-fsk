@@ -509,7 +509,7 @@ int fsk_test1(void)
 
     printf("------------BEGINNING FSK TEST 1-------------\n");
     //Open fsk handle
-    fsk = fsk_init();
+    fsk = fsk_init(SAMP_PER_SYMB*SYMB_PER_REV);
     if (fsk == NULL){
         fprintf(stderr, "Couldn't initialize fsk\n");
         status = -1;
@@ -529,7 +529,7 @@ int fsk_test1(void)
     tx_samples[0].i = 2047;
     tx_samples[0].q = 0;
     //Modulate
-    fsk_mod(fsk, tx_data, sizeof(tx_data), &tx_samples[1]);
+    fsk_mod(fsk, tx_data, sizeof(tx_data), SAMP_PER_SYMB, &tx_samples[1]);
     printf("Modulating: '%s'\n", tx_data);
     printf("%u tx samples\n", num_samples_tx);
 
@@ -540,16 +540,16 @@ int fsk_test1(void)
     printf("2nd demod will receive %u samples\n", num_samples_rx2);
 
     //Demod part 1
-    num_bytes_rx1 = fsk_demod(fsk, tx_samples, num_samples_rx1, true, -1, rx_data,
-                              &num_samples_processed);
+    num_bytes_rx1 = fsk_demod(fsk, tx_samples, num_samples_rx1, true, -1, SAMP_PER_SYMB,
+                              rx_data, &num_samples_processed);
     printf("Demodulated %u bytes\n", num_bytes_rx1);
     print_chars(rx_data, num_bytes_rx1);
     printf("   Num samples processed = %d\n", num_samples_processed);
 
     //Demod part 2
     num_bytes_rx2 = fsk_demod(fsk, &tx_samples[num_samples_rx1], num_samples_rx2, false,
-                              sizeof(tx_data)-num_bytes_rx1, &rx_data[num_bytes_rx1],
-                              &num_samples_processed);
+                              sizeof(tx_data)-num_bytes_rx1, SAMP_PER_SYMB,
+                              &rx_data[num_bytes_rx1], &num_samples_processed);
     printf("Demodulated %u bytes\n", num_bytes_rx2);
     print_chars(&rx_data[num_bytes_rx1], num_bytes_rx2);
     printf("   Num samples processed = %d\n", num_samples_processed);

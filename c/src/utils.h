@@ -64,7 +64,7 @@ int write_samples_to_csv_file(char *filename, int16_t *samples, int num_samples)
  * @return      number of samples loaded on success; -1 on failure
  */
 int load_samples_from_csv_file(char *filename, bool pad_zeros, int buffer_size,
-                                int16_t **samples);
+                               int16_t **samples);
 
 /**
  * Write 'struct complex_sample' samples to csv file
@@ -76,7 +76,7 @@ int load_samples_from_csv_file(char *filename, bool pad_zeros, int buffer_size,
  * @return      0 on success, -1 on failure
  */
 int write_struct_samples_to_csv_file(char *filename, struct complex_sample *samples,
-                                        int num_samples);
+                                     int num_samples);
 
 /**
  * Load 'struct complex_sample' samples from csv file into heap memory buffer.
@@ -93,7 +93,7 @@ int write_struct_samples_to_csv_file(char *filename, struct complex_sample *samp
  * @return      number of samples loaded on success; -1 on failure
  */
 int load_struct_samples_from_csv_file(char *filename, bool pad_zeros, int buffer_size,
-                                        struct complex_sample **samples);
+                                      struct complex_sample **samples);
 
 void print_chars(uint8_t *data, int num_bytes);
 void print_hex_contents(uint8_t *data, int num_bytes);
