@@ -100,7 +100,7 @@ end
 %%-------------------TRANSMIT-----------------------------
 if ~no_tx
    %Amount of flat samples (0+0j) to add to the beginning/end of tx signal
-   null_amt = 350;
+   null_amt = 300;
 
    if rand_input
       %Create random data

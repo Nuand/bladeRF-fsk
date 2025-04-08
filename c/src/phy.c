@@ -843,7 +843,7 @@ void *phy_receive_frames(void *arg)
     unsigned int            num_bytes_rx;
     unsigned int            data_idx;   //Current index of rx_buffer to receive new bytes
                                         //on. doubles as the current received frame length
-    uint64_t                samp_buf_idx;   //Current index of pnorm samples buffer to 
+    uint64_t                samp_buf_idx;   //Current index of pnorm samples buffer to
                                             //correlate/demod samples from
     uint64_t                samp_idx;       //Total running samples index/timestamp, after
                                             //decimation. Marks the 1st sample in current
@@ -951,7 +951,7 @@ void *phy_receive_frames(void *arg)
                     //Receive more samples
                     #ifdef RX_SAMPLES_FROM_FILE
                         //Read input samples from file
-                        nread = fread(phy->rx->in_samples, sizeof(phy->rx->in_samples[0]), 
+                        nread = fread(phy->rx->in_samples, sizeof(phy->rx->in_samples[0]),
                                       NUM_SAMPLES_RX*2, in_samples_file);
                         if (nread == 0){
                             //EOF
@@ -965,7 +965,7 @@ void *phy_receive_frames(void *arg)
                         }
                         num_samples_rx_act = nread/2;
                     #else
-                        status = bladerf_sync_rx(phy->dev, phy->rx->in_samples, 
+                        status = bladerf_sync_rx(phy->dev, phy->rx->in_samples,
                                                  NUM_SAMPLES_RX, &metadata, 5000);
                         if (status != 0){
                             ERROR("RX: %s: Couldn't receive samples from bladeRF: %s\n",
@@ -1189,12 +1189,13 @@ void *phy_receive_frames(void *arg)
 
                 if (!waiting_on_snr_est){
                     //Prepare new SNR estimate after frame ended
-                    //samp_buf_idx is now at the end of frame, at start of ramp down.
-                    //+10 for some settling time, ideally would do +7000 to account for
-                    //bladeRF2 DC offset IIR filter decay, but AGC can change quickly.
+                    //samp_buf_idx is now at the end of frame, at start of ramp down. Add
+                    //time for ramp down and power estimate settling
+                    //ideally would add extra settling time (+7000) to account for
+                    //bladeRF2 DC offset IIR filter decay, but AGC can change very quickly
                     //post-frame samples buffer index to use for noise estimate:
                     noise_est_pwr_idx  = samp_buf_idx + RAMP_LENGTH +
-                                         pnorm_settle_time + 10;
+                                         pnorm_settle_time;
                 }
 
                 if (noise_est_pwr_idx >= num_samples_rx_dec[samp_buf_sel]){

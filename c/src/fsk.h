@@ -78,7 +78,7 @@ unsigned int fsk_mod(struct fsk_handle *fsk, uint8_t *data_buf, int num_bytes,
  * Expected bit order: LSb arrives first, MSb arrives last.
  * This function will still work when the number of samples line up in a way that the
  * last byte is only partially demodulated (e.g. 3 of 8 bits demodulated, 6 of 8 samples
- * processed from the 4th bit). It saves off its state to the fsk_handle struct, so in 
+ * processed from the 4th bit). It saves off its state to the fsk_handle struct, so in
  * the next call to fsk_demod(), it will resume and finish demodulating that byte.
  *
  * @param[in]   fsk                fsk_handle struct

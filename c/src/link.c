@@ -83,7 +83,7 @@ struct tx {
 struct rx {
     struct data_frame data_frame_buf;       //Output data frame buffer
     struct ack_frame  ack_frame_buf;        //Output ack frame buffer
-    uint8_t          *extra_bytes;          //Leftover bytes received but not returned to 
+    uint8_t          *extra_bytes;          //Leftover bytes received but not returned to
                                             //the user after a call to link_receive_data()
     unsigned int      num_extra_bytes;      //Number of bytes in 'extra_bytes' buffer
     pthread_t         thread;               //Receiver thread

@@ -42,7 +42,7 @@
  *
  * @param[in]   dev     pointer to bladeRF device handle
  * @param[in]   params  pointer to radio_params struct specifying frequencies/gains
- * 
+ *
  * @return      0 on success, <0 on error
  */
 int radio_init_and_configure(struct bladerf *dev, struct radio_params *params);

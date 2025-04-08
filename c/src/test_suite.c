@@ -44,7 +44,7 @@
 /**
  * Test link layer code with data transfer between two devices
  */
-int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_frequency tx_freq2, 
+int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_frequency tx_freq2,
               bladerf_gain tx_gain, bladerf_gain rx_gain)
 {
     struct link_handle *link1 = NULL;
@@ -487,7 +487,7 @@ int phy_receive_test(char *dev_id)
 }
 
 /**
- * FSK mod/demod test. 
+ * FSK mod/demod test.
  * Tests the case where part of a byte is received from first set of samples,
  * and the rest is received from the next set of samples
  */

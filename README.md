@@ -159,6 +159,12 @@ the program. Try adjusting the gains and run it again.
    receiving. An EOF bit would need to be added to the link layer packet format in order
    to stop this behavior.
 
+3) SNR estimates are not perfect and may report lower SNR than in reality, particularly
+   when AGC is enabled. SNR estimates are based off the noise power estimate shortly after
+   the end of each frame, once the noise power estimate from `pnorm.c` has settled.
+   Occassionally when AGC is enabled, the AGC reacts too quickly after the frame ends,
+   gaining up the noise and causing the noise power estimate to be too high.
+
 ## Troubleshooting ##
 Is the FSK modem not working for you? Here are some troubleshooting steps:
 
@@ -201,7 +207,7 @@ Is the FSK modem not working for you? Here are some troubleshooting steps:
 | ----------------------------------- |:---------------------------------|
 | BladeRF Sample rate                 | 2 Msps                           |
 | BladeRF Bandwidth                   | 1.5 MHz                          |
-| Raw link rate                       | 250 kbps                         | 
+| Raw link rate                       | 250 kbps                         |
 | Symbol rate                         | 250 ksym/s                       |
 | Bits per symbol                     | 1                                |
 | Symbol mapping                      | Positive frequency deviation = 1<br>Negative frequency deviation = 0 |
@@ -219,7 +225,7 @@ Is the FSK modem not working for you? Here are some troubleshooting steps:
 ### Framing Details ###
 Link layer frame is embedded within the physical layer frame.
 
-Note: Link layer data frame payload length is adjustable on the command line via 
+Note: Link layer data frame payload length is adjustable on the command line via
 `-p`/`--packet-size`. Listed below are the frame sizes for the default payload length of
 1000 bytes.
 

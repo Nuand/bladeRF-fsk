@@ -141,7 +141,7 @@ static int radio_configure_module(struct bladerf *dev, struct module_config *c)
         if (c->use_agc) {
             const char       *board_name = bladerf_get_board_name(dev);
             bladerf_gain_mode agc_mode;
-            
+
             if (strcmp(board_name, "bladerf2") == 0){
                 //Found that fastattack works best
                 agc_mode = BLADERF_GAIN_FASTATTACK_AGC; //bladeRF2 AGC
@@ -289,7 +289,7 @@ static int radio_configure_module(struct bladerf *dev, struct module_config *c)
     return status;
 }
 
-/** 
+/**
  * Initialize synchronous interface
  */
 static int radio_init_sync(struct bladerf *dev)

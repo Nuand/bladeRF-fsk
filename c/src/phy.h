@@ -99,7 +99,7 @@ struct phy_handle;
 //----------------------Transmitter functions---------------------------
 /**
  * Start the PHY transmitter thread
- * 
+ *
  * @param[in]   phy     pointer to phy_handle struct
  *
  * @return      0 on success, -1 on failure
@@ -108,7 +108,7 @@ int phy_start_transmitter(struct phy_handle *phy);
 
 /**
  * Stop the PHY transmitter thread
- * 
+ *
  * @param[in]   phy     pointer to phy_handle struct
  *
  * @return      0 on success, -1 on failure
@@ -129,7 +129,7 @@ int phy_fill_tx_buf(struct phy_handle *phy, uint8_t *data_buf, unsigned int leng
 //------------------------Receiver functions---------------------------
 /**
  * Start the PHY receiver  thread
- * 
+ *
  * @param[in]   phy     pointer to phy_handle struct
  *
  * @return      0 on success, -1 on failure
@@ -138,7 +138,7 @@ int phy_start_receiver(struct phy_handle *phy);
 
 /**
  * Stop the PHY receiver thread
- * 
+ *
  * @param[in]   phy     pointer to phy_handle struct
  *
  * @return      0 on success,-1 on failure,
@@ -148,7 +148,7 @@ int phy_stop_receiver(struct phy_handle *phy);
 
 /**
  * Request a received frame from phy_receive_frames(). Caller should call
- * phy_release_rx_buf() when done with the received frame so that 
+ * phy_release_rx_buf() when done with the received frame so that
  * phy_receive_frames() does not drop any frames.
  *
  * @param[in]   phy             pointer to phy_handle struct
@@ -169,9 +169,9 @@ void phy_release_rx_buf(struct phy_handle *phy);
 //-----------------------Init/Deinit functions-------------------------
 /**
  * Open/Initialize a phy_handle
- * 
+ *
  * @param[in]   dev              pointer to opened bladeRF device handle
- * @param[in]   params           pointer to radio parameters 
+ * @param[in]   params           pointer to radio parameters
  * @param[in]   max_frame_size   maximum data frame size to transmit/receive
  *
  * @return      allocated phy_handle on success, NULL on failure

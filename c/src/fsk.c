@@ -39,7 +39,7 @@ struct fsk_handle {
     //These variables keep track of the demodulator's state when a call to fsk_demod()
     //did not fully demodulate the last byte, meaning it needs to be called again with
     //more samples to finish demodulating that last byte
-    bool                   last_byte_demod_complete;  //False if the last byte was partially 
+    bool                   last_byte_demod_complete;  //False if the last byte was partially
                                                       //demodulated in a call to fsk_demod()
     uint8_t                last_byte;
     double                 last_phase;
@@ -56,7 +56,7 @@ static void angle_unwrap(double angle_prev, double *angle);
 /**
  * Generate 16bit two's complement IQ samples (SC16 Q11 format) corresponding to angles
  * from 0 to 2*pi on the unit circle. Range = [-2048, 2047]. Store in 'sample_table'.
- * 0th index is at 1+j0 (2047 + j0). Next indices will rotate counter-clockwise around 
+ * 0th index is at 1+j0 (2047 + j0). Next indices will rotate counter-clockwise around
  * the circle.
  * Example: points_per_rev = 12 -> would produce:
  *

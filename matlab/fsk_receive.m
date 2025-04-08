@@ -125,8 +125,8 @@ signoise_est_pwr = est_power(sig_start_idx);
 %N power: Use est_power after end of frame
 %frame end index: after all bytes and ramp down. +1 for setting init phase
 frame_end_idx    = sig_start_idx + 1 + num_bytes*8*sps + sps;
-%est_power noise index: add time for pnorm to settle, +10 for extra settling time
-noise_est_idx    = frame_end_idx + pnorm_settle_time + 10;
+%est_power noise index: add time for pnorm to settle
+noise_est_idx    = frame_end_idx + pnorm_settle_time;
 
 if noise_est_idx > length(est_power)
    fprintf(2, ['%s: Not enough samples to allow time for noise power estimate to ' ...
