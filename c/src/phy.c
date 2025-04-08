@@ -867,7 +867,9 @@ void *phy_receive_frames(void *arg)
     unsigned int            num_snr_ests = 0;
     bool                    waiting_on_snr_est;
     int                     pnorm_settle_time;
-    unsigned long           frame_cnt;
+    #ifdef ENABLE_NOTES
+        unsigned long       frame_cnt = 0;
+    #endif
     int                     num_samples_proc;  //num samps processed by fsk_demod())
     bool                    already_rxd_next_buf;
 
@@ -934,7 +936,6 @@ void *phy_receive_frames(void *arg)
     data_idx             = 0;
     samp_idx             = 0;
     samp_buf_sel         = 0;
-    frame_cnt            = 0;
     snr_est_avg          = 0;
     waiting_on_snr_est   = false;
     already_rxd_next_buf = false;
@@ -1093,7 +1094,9 @@ void *phy_receive_frames(void *arg)
                     preamble_detected  = true;
                     new_frame          = true;
                     checked_frame_type = false;
-                    frame_cnt++;
+                    #ifdef ENABLE_NOTES
+                        frame_cnt++;
+                    #endif
 
                     //SNR estimator bookkeeping
                     if (waiting_on_snr_est){
