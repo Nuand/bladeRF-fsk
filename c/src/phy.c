@@ -1016,6 +1016,12 @@ void *phy_receive_frames(void *arg)
                     #endif
 
                     #ifdef BYPASS_RX_PNORM
+                        //Run power normalizer just to gather power ests for SNR est
+                        //Set NULL pointer for output samples so it doesn't fill them
+                        pnorm(phy->rx->pnorm, num_samples_rx_dec[samp_buf_sel],
+                              phy->rx->filt_samples, NULL, phy->rx->est_power, NULL);
+
+                        //copy filt_samples into pnorm_samples to bypass pnorm
                         memcpy(phy->rx->pnorm_samples[samp_buf_sel], phy->rx->filt_samples,
                                num_samples_rx_dec[samp_buf_sel] * sizeof(struct complex_sample));
                     #else

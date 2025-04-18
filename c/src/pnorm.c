@@ -74,7 +74,7 @@ void pnorm_hold(struct pnorm_state_t *state, bool val) {
 }
 
 void pnorm(struct pnorm_state_t *state, uint16_t length, struct complex_sample *in,
-            struct complex_sample *out, float *ests, float *gains) {
+           struct complex_sample *out, float *ests, float *gains) {
     int i ;
     float power;
     int32_t temp;
@@ -104,29 +104,31 @@ void pnorm(struct pnorm_state_t *state, uint16_t length, struct complex_sample *
         }
 
         /* Apply gain */
-        //Use temp int32_t in case this number goes outside 16bit range
-        temp = (int32_t) round(in[i].i * gain);
-        //Clamp
-        if (temp > CLAMP_VAL_ABS){
-            temp = CLAMP_VAL_ABS;
-        }else if (temp < -CLAMP_VAL_ABS){
-            temp = -CLAMP_VAL_ABS;
-        }
-        out[i].i = (int16_t) temp;
+        if (out != NULL){
+            //Use temp int32_t in case this number goes outside 16bit range
+            temp = (int32_t) round(in[i].i * gain);
+            //Clamp
+            if (temp > CLAMP_VAL_ABS){
+                temp = CLAMP_VAL_ABS;
+            }else if (temp < -CLAMP_VAL_ABS){
+                temp = -CLAMP_VAL_ABS;
+            }
+            out[i].i = (int16_t) temp;
 
-        temp = (int32_t) round(in[i].q * gain);
-        //Clamp
-        if (temp > CLAMP_VAL_ABS){
-            temp = CLAMP_VAL_ABS;
-        }else if (temp < -CLAMP_VAL_ABS){
-            temp = -CLAMP_VAL_ABS;
-        }
-        out[i].q = (int16_t) temp;
+            temp = (int32_t) round(in[i].q * gain);
+            //Clamp
+            if (temp > CLAMP_VAL_ABS){
+                temp = CLAMP_VAL_ABS;
+            }else if (temp < -CLAMP_VAL_ABS){
+                temp = -CLAMP_VAL_ABS;
+            }
+            out[i].q = (int16_t) temp;
 
-        /* Blank impulse power */
-        power = (out[i].i * out[i].i + out[i].q * out[i].q)/(float)(SAMP_MAX_ABS*SAMP_MAX_ABS);
-        if (power >= 10.0f) {
-            out[i].i = out[i].q = 0;
+            /* Blank impulse power */
+            power = (out[i].i * out[i].i + out[i].q * out[i].q)/(float)(SAMP_MAX_ABS*SAMP_MAX_ABS);
+            if (power >= 10.0f) {
+                out[i].i = out[i].q = 0;
+            }
         }
 
         //Write to debug buffers

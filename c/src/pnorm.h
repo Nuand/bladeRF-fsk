@@ -39,10 +39,10 @@ void pnorm_hold(struct pnorm_state_t *state, bool val) ;
 
 /**
  * Power normalize a set of samples.
- * The 'ests' and 'gains' output buffers are for extra debug information. If they are NULL,
- * the function will not attempt to place values in them.
+ * Output buffers will not be written if they are NULL.
+ * The 'ests' and 'gains' output buffers are for extra debug information.
  */
 void pnorm(struct pnorm_state_t *state, uint16_t length, struct complex_sample *in,
-            struct complex_sample *out, float *est, float *gain);
+           struct complex_sample *out, float *est, float *gain);
 
 #endif
