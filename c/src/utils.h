@@ -108,28 +108,6 @@ void print_hex_contents(uint8_t *data, int num_bytes);
  */
 int create_timeout_abs(unsigned int timeout_ms, struct timespec *timeout_abs);
 
-/**
- * Converts an array of int16_t IQ samples to an array of 'complex_sample' structs.
- * Caller is responsible for memory allocation.
- * 
- * @param[in]   samples         array of IQ samples to convert
- * @param[in]   num_samples     number of samples to convert
- * @param[out]  struct_samples  buffer to place converted samples in
- */
-void conv_samples_to_struct(int16_t *samples, unsigned int num_samples,
-                            struct complex_sample *struct_samples);
-
-/**
- * Converts an array of complex_sample structs into an array of int16_t
- * samples. Caller is responsible for memory allocation.
- * 
- * @param[in]   struct_samples  complex_sample array to convert
- * @param[in]   num_samples     number of samples to convert
- * @param[out]  samples         buffer to place converted samples in
- */
-void conv_struct_to_samples(struct complex_sample *struct_samples, unsigned int num_samples,
-                            int16_t *samples);
-
 
 struct numeric_suffix {
     const char *suffix;

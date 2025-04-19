@@ -326,28 +326,6 @@ int create_timeout_abs(unsigned int timeout_ms, struct timespec *timeout_abs)
     return 0;
 }
 
-void conv_samples_to_struct(int16_t *samples, unsigned int num_samples,
-                            struct complex_sample *struct_samples)
-{
-    unsigned int i;
-
-    for (i = 0; i < (num_samples*2); i += 2){
-        struct_samples[i/2].i = samples[i];
-        struct_samples[i/2].q = samples[i+1];
-    }
-}
-
-void conv_struct_to_samples(struct complex_sample *struct_samples, unsigned int num_samples,
-                            int16_t *samples)
-{
-    unsigned int i;
-
-    for (i = 0; i < (num_samples*2); i += 2){
-        samples[i] = struct_samples[i/2].i;
-        samples[i+1] = struct_samples[i/2].q;
-    }
-}
-
 int str2lnagain(const char *str, bladerf_lna_gain *gain)
 {
     if (strcasecmp(str, "bypass") == 0) {
