@@ -32,27 +32,35 @@ rigorous modem.
 ## Dependencies ##
 
 - [libbladeRF]
+   - Installs as part of the main [bladeRF host software]. Install instructions can be
+     found on the [wiki].
 
-[libbladeRF]: ../../libraries/libbladeRF
+[libbladeRF]: https://github.com/Nuand/bladeRF/tree/master/host/libraries/libbladeRF
+[bladeRF host software]: https://github.com/Nuand/bladeRF/tree/master/host
+
 
 ## Build Instructions ##
 
-The program may be built/installed as host software that uses libbladeRF. Follow the build instructions
-listed in [bladeRF/host/README.md].
+The program may be built/installed as host software that uses libbladeRF. Follow the
+instructions listed on the [wiki]. Instructions to build from the source can also be found
+in the [host README].
 
-[bladeRF/host/README.md]: ../../README.md
+The program also builds standalone if libbladeRF has been installed on your system. To
+build:
+```
+cd c
+mkdir build && cd build
+cmake [options] ..
+make
+```
+The executable will be created in the build folder; you can run it with `./bladeRF-fsk`.
+Build files can be cleaned up by removing the `build` directory.
 
-_NOTE_: Release builds are recommended for this program.
-More info: The receiver thread inside phy.c eats up a lot of CPU resources with DSP.
-Debug builds do not contain compiler optimization, so running a debug build may
-cause RX overruns (i.e. received samples get dropped) which can cause the modem to fail.
-If you want to check the %CPU that this thread uses, you can run bladeRF-fsk_test_suite
-which contains a function phy_receive_test() that simply runs the receiver thread for
-some time. Monitor the CPU usage of the threads using the linux command:
-```
-top -H -p $(pidof [path to build/output executables]/bladeRF-fsk_test_suite)
-```
-When bladeRF-fsk_test_suite gets to phy_receive_test(), be sure to watch the CPU usage.
+[wiki]: https://github.com/Nuand/bladeRF/wiki#user-content-bladeRF_software_buildinstallation
+[host README]: https://github.com/Nuand/bladeRF/blob/master/host/README.md
+
+_NOTE_: Debug builds (without compiler optimization) may cause RX overruns which can cause
+the modem to fail.
 
 ### Build Variables ###
 
