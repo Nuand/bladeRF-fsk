@@ -88,7 +88,9 @@ Setting -DBLADERF-FSK_ENABLE_NOTES_LINK=ON will show you when a frame is receive
 CRC errors. Setting -DBLADERF-FSK_ENABLE_NOTES_PHY=ON will enable SNR estimates to print
 out after every received frame, and it will show you when RX overruns occur, meaning the
 PHY receiver thread could not process a set of samples fast enough and samples had to be
-dropped.
+dropped. Setting -DBLADERF-FSK_BYPASS_RX_PNORM=ON likely will cause acquisition to fail,
+since the correlation power threshold is based on the assumption of a full scale signal
+output by the power normalizer.
 
 ## How to Run ##
 To run the top-level bladeRF-fsk program with defaults, type into a terminal:
@@ -173,6 +175,8 @@ the program. Try adjusting the gains and run it again.
    Occassionally when AGC is enabled, the AGC reacts too quickly after the frame ends,
    gaining up the noise and causing the noise power estimate to be too high.
 
+4) The program currently does not support Windows, only Linux/OSX
+
 ## Troubleshooting ##
 Is the FSK modem not working for you? Here are some troubleshooting steps:
 
@@ -182,26 +186,28 @@ Is the FSK modem not working for you? Here are some troubleshooting steps:
   `-DBLADERF-FSK_ENABLE_VERBOSE_BLADERF=ON` to get full verbosity in bladeRF device
   messages from libbladeRF.
 
-2) Adjust the TX and RX gains. If TX+RX gains are too high, the receiver may experience
+2) Adjust the TX and RX gains and/or disable AGC. If TX+RX gains are too high, the receiver may experience
   clipping which can cause bit errors or weaken acquisition. If TX gain is too low, SNR
   may be too low to acquire and/or demodulate without errors. If RX gain is too low, there
   may be too much quantization noise at the receiver.
 
-3) Log received samples to file, using cmake option `-DBLADERF-FSK_LOG_RX_SAMPLES=ON`.
+3) If using bladeRF1, be sure TX and RX frequencies are not multiples of each other, i.e. `-r 2G -t 1G`. Harmonics in the bladeRF1 are prominent and can cause distorted signals, resulting in CRC errors in bladeRF-fsk.
+
+4) Log received samples to file, using cmake option `-DBLADERF-FSK_LOG_RX_SAMPLES=ON`.
   File format is binary 16-bit IQ with each sample having a range of [-2047, 2048], I
   before Q in each IQ sample pair, little endian.
    * Feed the signal into the FSK model by running `matlab/fsk.m` in MATLAB/Octave, which will plot the signal, correlate, and attempt to demodulate it. Set `use_file=1`, `csv=0`, `no_tx=1`, `rx_nbytes` to your payload length + 9 for link layer header/footer, and replace `rxfile=rx_samples.bin` with the path to your samples file.
      * Note that `fsk.m` does not include link layer functionality, so it will not perform a CRC check and it will display link layer header and footer bytes.
-   * You can manually ingest the signal in MATLAB/Octave using `host/misc/matlab/load_sc16q11()` (signal will be normalized to [-1.0, 1.0) floating point). Then plot and analyze it.
 
-4) Move devices very close to each other to maximize signal power. Or, replace antennas
+5) Move devices very close to each other to maximize signal power. Or, replace antennas
   with SMA cables (TX hooked up to RX) and perform wired testing to rule out any RF
-  channel effects or interference. Note: BE CAREFUL not to set TX gain too high to damage
-  your device during wired testing. Start with a low gain. Suggested wired gains below:
-   * On the bladeRF 2, `--tx-gain 50`, `--rx-gain -16` will result in roughly 1/3 scale signal (no clipping) with very low noise and distortion.
-   * On the bladeRF 1, `--tx-vga1 -4`, `--tx-vga2 0`, with RX gains set to the very minimum, will result in a similar signal that does not clip at the receiver.
+  channel effects or interference. Note: be careful not to set TX gain too high to
+  potentially damage your device during wired testing. Start with a lower gain. Suggested
+  wired gains below:
+   * On the bladeRF 2, `--tx-gain 50`, `--rx-gain -12` will result in a clean signal with no clipping and low noise/distortion.
+   * On the bladeRF 1, `--tx-gain 50`, `--rx-gain -1` will result in a similar signal that does not clip at the receiver.
 
-5) Check for frequency offset (could be caused by bad calibration). A high enough frequency
+6) Check for frequency offset (could be caused by bad calibration). A high enough frequency
   offset (say 20 kHz) will cause signal acquisition to fail. In `c/src/phy.h`, uncomment
   `#define TX_DC_TONE` then rebuild the program to make the PHY transmitter send a DC tone
   in its bursts instead of an FSK signal. Log the received samples to file, and find the
