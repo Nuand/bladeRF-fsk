@@ -1001,7 +1001,7 @@ void *phy_receive_frames(void *arg)
                                 phy->rx->filt_samples[j].q = phy->rx->in_samples[i+1];
                                 j++;
                             }
-                            if (dec_phase == RX_DEC_FACT){
+                            if (dec_phase == RX_DEC_FACT-1){
                                 dec_phase = 0;
                             }else{
                                 dec_phase++;
