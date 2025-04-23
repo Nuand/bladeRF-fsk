@@ -184,7 +184,7 @@ static const size_t num_freq_suffixes =
         printf("\n");
         printf("  TX Parameters:\n");
         printf("    Input handle:     %p\n",  config->tx_input);
-        printf("    File size:        %lu\n", config->tx_filesize);
+        printf("    File size:        %ld\n", config->tx_filesize);
         printf("    Frequency [Hz]:   %lu\n", config->params.tx_freq);
         printf("    Channel:          %d\n",  config->params.tx_chan);
         printf("    Biastee:          %d\n",  config->params.tx_biastee);
