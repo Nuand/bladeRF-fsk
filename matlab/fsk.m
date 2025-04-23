@@ -59,7 +59,6 @@ h              = pi/2;  %Phase modulation index (phase deviation per symbol)
 dec_factor     = 2;     %Amount to decimate by during RX processing
 
 if use_file
-   addpath('../../../misc/matlab/');   %add save_csv()/load_csv() utility functions
    if csv
       txfile = 'tx_samples.csv';
       rxfile = 'rx_samples.csv';
@@ -67,6 +66,7 @@ if use_file
       txfile = 'tx_samples.bin';
       rxfile = 'rx_samples.bin';
    end
+   B = 12;  %num bits per I or Q sample
 end
 
 %32-bit training sequence - hex: AA, AA, AA, AA
@@ -118,19 +118,6 @@ if ~no_tx
       fprintf('       String to TX: ''%s''\n', bin2dec(tx_bits));
    end
 
-   %%Add header/footer to mimic link layer data frame
-   %seq_num   = 56444;
-   %frame_len = size(tx_bits, 1);
-   %hdr       = dec2bin([0, bitand(seq_num, 255), bitshift(seq_num, -8), bitand(frame_len, 255), bitshift(frame_len, -8)], 8);
-   %ftr       = dec2bin([123, 80, 64, 129], 8);  %fake CRC32
-   %tx_bits   = [hdr; tx_bits; ftr];
-
-   %%DEBUG
-   %%Write tx_bits to binary file
-   %fid = fopen('tx.bin', 'w');
-   %fwrite(fid, bin2dec(tx_bits));
-   %fclose(fid);
-
    %Make FSK signal
    tx_sig = fsk_transmit(training_seq, preamble, tx_bits, scrambling_seed, sps, h);
    %Add some flat output to the front and back of the signal
@@ -170,13 +157,29 @@ if ~no_tx
 
    %---------------------CHANNEL-------------------------
    if use_file
-      %Write signal to file
+      %--Write signal to file
+      %convert to fixed point and clamp to max/min values
+      tx_sig_fixp   = round(tx_sig * 2^(B-1)); %scale and round
+      tx_sig_fixp_i = real(tx_sig_fixp);
+      tx_sig_fixp_q = imag(tx_sig_fixp);
+
+      tx_sig_fixp_i(tx_sig_fixp_i >  2^(B-1)-1) =  2^(B-1)-1;
+      tx_sig_fixp_i(tx_sig_fixp_i < -2^(B-1)  ) = -2^(B-1);
+
+      tx_sig_fixp_q(tx_sig_fixp_q >  2^(B-1)-1) =  2^(B-1)-1;
+      tx_sig_fixp_q(tx_sig_fixp_q < -2^(B-1)  ) = -2^(B-1);
+
+      tx_sig_fixp = [tx_sig_fixp_i; tx_sig_fixp_q];
+
       if csv
-         save_csv(txfile, tx_sig.');         %Write to csv file
+         csvwrite(txfile, tx_sig_fixp.');
       else
-         save_sc16q11(txfile, tx_sig.');     %Write to binary file
+         %write to binary file
+         fid = fopen(txfile, 'w');
+         fwrite(fid, tx_sig_fixp, 'int16', 0, 'l');
+         fclose(fid);
       end
-      fprintf('Wrote TX IQ samples to %s.\n', txfile);
+      fprintf('Wrote TX IQ samples to file %s.\n', txfile);
    elseif ~no_rx
       %--Add gaussian noise and attenuation to signal
       %Noise power desired in channel (units dBW)
@@ -204,13 +207,21 @@ end
 if ~no_rx
    if use_file
       %Wait for user to transmit/receive these samples with bladeRF
-      fprintf('Press any key when RX IQ samples file %s is ready...\n', rxfile);
-      pause;
-      if csv
-         rx_sig = load_csv(rxfile).';     %Load from CSV file
+      if no_tx
+         fprintf('Reading RX IQ samples from file %s\n', rxfile);
       else
-         rx_sig = load_sc16q11(rxfile).'; %Load from binary file
+         fprintf('Press any key when RX IQ samples file %s is ready...\n', rxfile);
+         pause;
       end
+      if csv
+         rx_sig = csvread(rxfile).';
+      else
+         %load from binary file
+         fid    = fopen(rxfile, 'r');
+         rx_sig = fread(fid, [2, Inf], 'int16', 0, 'l');
+         fclose(fid);
+      end
+      rx_sig = complex(rx_sig(1,:), rx_sig(2,:))/2^(B-1);
    end
 
    %Get the modulated IQ waveform for the preamble
@@ -279,7 +290,9 @@ if ~no_rx
       figure('position', [0 0 960 200]);
       plot(abs(rx_info.preamble_corr).^2); hold on;
       plot([1, length(rx_info.preamble_corr)], repmat(rx_info.corr_thresh, 1, 2), '--r');
-      plot(rx_info.sig_start_idx, abs(rx_info.preamble_corr(rx_info.sig_start_idx)).^2, '*');
+      if rx_info.sig_start_idx ~= -1
+         plot(rx_info.sig_start_idx, abs(rx_info.preamble_corr(rx_info.sig_start_idx)).^2, '*');
+      end
       title('RX cross correlation with preamble (power)');
       legend('correlation power', 'threshold', 'peak');
 
@@ -330,11 +343,6 @@ if ~no_rx
                ylim([0 2]);
             end
          end
-%         if isequal(rx_bits(6:end-4,:), tx_bits(6:end-4,:))
-%            fprintf('RX link payload data matched TX data\n');
-%         else
-%            fprintf(2, 'RX link payload did not match TX data\n');
-%         end
       end
    end
 
