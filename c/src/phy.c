@@ -1079,7 +1079,7 @@ void *phy_receive_frames(void *arg)
                     corr_process(phy->rx->corr,
                                  &(phy->rx->pnorm_samples[samp_buf_sel][samp_buf_idx]),
                                  (size_t) (num_samples_rx_dec[samp_buf_sel]-samp_buf_idx),
-                                 samp_idx);
+                                 samp_idx+samp_buf_idx);
                 if (corr_samp_idx != CORRELATOR_NO_RESULT){
                     //Detected a frame
                     if (corr_samp_idx < samp_idx){
