@@ -5,8 +5,8 @@ project(bladeRF-fsk C)
 # Version information
 ################################################################################
 
-set(VERSION_INFO_MAJOR  0)
-set(VERSION_INFO_MINOR  1)
+set(VERSION_INFO_MAJOR  1)
+set(VERSION_INFO_MINOR  0)
 set(VERSION_INFO_PATCH  0)
 
 ################################################################################

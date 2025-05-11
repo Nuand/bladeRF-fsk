@@ -1,0 +1,68 @@
+================================================================================
+bladeRF FSK CHANGELOG Summary
+
+This is a summary of bladeRF-fsk changes.
+================================================================================
+
+--------------------------------
+v1.0.0 (2025-05-11)
+--------------------------------
+
+This release introduces significant enhancements to the bladeRF-fsk modem,
+including critical bug fixes, new debugging capabilities, and improved
+performance and stability. Notably, RX FIR filter decimation has been added,
+improving processing speed by approximately 2X without compromising signal
+quality. A new robust SNR estimator has been implemented, enhancing PHY
+performance under varying channel conditions. Additionally, we've introduced
+support for bladeRF 2.0 hardware features, configurable packet sizes, and
+numerous debug and logging options to aid in system analysis and testing.
+
+This commits include:
+  * Added RX FIR filter 2X decimation to significantly reduce processing load
+    without signal degradation, resulting in ~2X speedup of FIR filtering,
+    power normalization, and FSK demodulation.
+  * Introduced robust PHY RX SNR estimator, providing improved noise and signal
+    estimation for more accurate SNR calculation.
+  * PHY RX SNR estimator now samples noise power after power normalization
+    settling to improve accuracy under AGC conditions.
+  * Added support for bladeRF 2.0 hardware, including bias-tee enabling and
+    selectable RX/TX channels.
+  * Added dynamic runtime-configurable packet sizes to PHY and Link layers,
+    removing previous hardcoded packet length.
+  * Improved responsiveness of text messages during stdout mode by reducing
+    buffer latency.
+  * Implemented detailed average SNR printout upon program termination,
+    providing clearer insight into overall channel quality.
+  * Added new CMake options for logging transmitted and received samples to
+    file, aiding in debugging and signal analysis.
+  * New debug defines introduced to log filtered and power-normalized RX samples
+    instead of raw data.
+  * Added detailed modem specifications and troubleshooting information to the
+    project's README documentation.
+  * Enhanced MATLAB simulation model with scrambling sequence matching C
+    implementation, significantly improving model realism.
+  * MATLAB model performance optimized by converting power normalization to
+    vector operations, providing considerable speedup for large signals.
+  * Added random phase offset in MATLAB model to emulate realistic channel
+    conditions.
+  * Custom code for IQ file loading and saving functions replaced older code
+    for improved MATLAB model performance.
+  * Fixed critical corner-case bug in PHY RX correlation that previously
+    resulted in dropped frames under specific buffer conditions.
+  * Fixed major bug causing infinite loop in PHY correlator due to timestamp
+    miscalculations, significantly improving PHY stability.
+  * Adjusted AGC mode to FASTATTACK on bladeRF 2.0, achieving better real-world
+    wireless performance during testing.
+  * Increased Link layer retransmissions from 3 to 6, enhancing reliability
+    under lower SNR conditions.
+  * Removed unused and obsolete utility functions, reducing code complexity and
+    improving readability.
+  * Improved error handling in PHY and Link layers, ensuring partial sample
+    processing during RX overruns instead of discarding data.
+  * Minor UI improvements and corrected help messages, increasing usability and
+    clarity for end-users.
+  * Removed deprecated legacy functions and replaced them with updated
+    libbladeRF API calls to maintain compatibility with latest software.
+  * Code readability and consistency improvements across multiple files,
+    including indentation fixes and clear commenting.
+
