@@ -185,10 +185,19 @@ if(APPLE)
 endif()
 
 # Set link libraries
-set(BLADERF_FSK_LIBS
-    bladeRF
-    ${CMAKE_THREAD_LIBS_INIT}
-)
+# Check if libbladerf_shared target exists (in-tree build)
+if(TARGET libbladerf_shared)
+    message(STATUS "bladeRF-fsk: Using in-tree libbladerf_shared")
+    set(BLADERF_FSK_LIBS libbladerf_shared)
+    # Optionally, add include directories if needed:
+    # target_include_directories(bladeRF-fsk PRIVATE ${LIBBLADERF_INCLUDE_DIRS})
+else()
+    message(STATUS "bladeRF-fsk: Using system libbladeRF")
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(LIBBLADERF REQUIRED libbladeRF)
+    set(BLADERF_FSK_LIBS ${LIBBLADERF_LIBRARIES})
+    include_directories(${LIBBLADERF_INCLUDE_DIRS})
+endif()
 
 if(NOT MSVC)
     set(BLADERF_FSK_LIBS ${BLADERF_FSK_LIBS} m)
@@ -249,7 +258,7 @@ endif()
 
 # Set link libraries
 set(TEST_SUITE_LIBS
-    bladeRF
+    ${BLADERF_FSK_LIBS}
     ${CMAKE_THREAD_LIBS_INIT}
 )
 
@@ -288,7 +297,7 @@ endif()
 
 # Set link libraries
 set(TEST_CONFIG_LIBS
-    bladeRF
+    ${BLADERF_FSK_LIBS}
 )
 
 add_executable(bladeRF-fsk_test_config ${TEST_CONFIG_SRC})
