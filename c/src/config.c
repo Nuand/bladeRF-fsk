@@ -26,6 +26,7 @@
 #include <getopt.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <inttypes.h>
 
 #include "config.h"
 #include "utils.h"
@@ -168,11 +169,11 @@ static const size_t num_freq_suffixes =
     {
         printf("  bladeRF handle:     %p\n",  config->bladerf_dev);
         printf("  payload length:     %u\n",  config->payload_length);
-        printf("  quiet:              %b\n",  config->quiet);
+        printf("  quiet:              %d\n",  config->quiet);
         printf("\n");
         printf("  RX Parameters:\n");
         printf("    Output handle:    %p\n",  config->rx_output);
-        printf("    Frequency [Hz]:   %lu\n", config->params.rx_freq);
+        printf("    Frequency [Hz]:   %" PRIu64 "\n", config->params.rx_freq);
         printf("    Channel:          %d\n",  config->params.rx_chan);
         printf("    Biastee:          %d\n",  config->params.rx_biastee);
         printf("    AGC enabled:      %d\n",  config->params.rx_agc);
@@ -185,7 +186,7 @@ static const size_t num_freq_suffixes =
         printf("  TX Parameters:\n");
         printf("    Input handle:     %p\n",  config->tx_input);
         printf("    File size:        %ld\n", config->tx_filesize);
-        printf("    Frequency [Hz]:   %lu\n", config->params.tx_freq);
+        printf("    Frequency [Hz]:   %" PRIu64 "\n", config->params.tx_freq);
         printf("    Channel:          %d\n",  config->params.tx_chan);
         printf("    Biastee:          %d\n",  config->params.tx_biastee);
         printf("    Use unified gain: %d\n",  config->params.tx_use_unified);

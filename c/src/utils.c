@@ -275,6 +275,7 @@ void print_hex_contents(uint8_t *data, int num_bytes)
 int create_timeout_abs(unsigned int timeout_ms, struct timespec *timeout_abs)
 {
     int status;
+    (void) status;
 
 #ifdef _WIN32
     // Windows implementation

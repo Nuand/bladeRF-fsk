@@ -852,7 +852,7 @@ void *phy_receive_frames(void *arg)
     bool                    preamble_detected;
     bool                    new_frame;
     bool                    checked_frame_type;     //have we checked frame type yet?
-    int                     frame_length;           //link layer frame length
+    int                     frame_length = 0;       //link layer frame length
     uint8_t                *rx_buffer = NULL;       //local rx data buffer
     uint8_t                 frame_type;
     struct bladerf_metadata metadata;               //bladerf metadata for sync_rx()
@@ -862,7 +862,7 @@ void *phy_receive_frames(void *arg)
     //actual number of samples output from FIR filter post decimation into each buffer
     unsigned int            num_samples_rx_dec[2];
     uint64_t                noise_est_pwr_idx = 0;
-    float                   signoise_est_pwr, noise_est_pwr, sig_est_pwr;
+    float                   signoise_est_pwr = 0, noise_est_pwr, sig_est_pwr;
     float                   snr_est, snr_est_db, snr_est_avg;
     unsigned int            num_snr_ests = 0;
     bool                    waiting_on_snr_est;

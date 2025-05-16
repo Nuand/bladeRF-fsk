@@ -22,6 +22,7 @@
 
 #include "radio_config.h"
 #include <string.h>
+#include <inttypes.h>
 
 #if defined(DEBUG_MODE) || defined(VERBOSE_MODE)
     #define DEBUG_MSG(...) fprintf(stderr, "[RADIO] " __VA_ARGS__)
@@ -66,14 +67,14 @@ static int radio_configure_module(struct bladerf *dev, struct module_config *c)
         return status;
     }
     if ((int64_t)c->frequency < freq_range->min || (int64_t)c->frequency > freq_range->max){
-        fprintf(stderr, "Requested frequency %ld Hz is outside supported range [%ld, %ld] Hz\n",
+        fprintf(stderr, "Requested frequency %" PRIu64 " Hz is outside supported range [%" PRId64 ", %" PRId64 "] Hz\n",
                 c->frequency, freq_range->min, freq_range->max);
         return BLADERF_ERR_RANGE;
     }
 
     status = bladerf_set_frequency(dev, c->module, c->frequency);
     if (status != 0){
-        fprintf(stderr, "Failed to set frequency = %lu: %s\n",
+        fprintf(stderr, "Failed to set frequency = %" PRIu64 ": %s\n",
                 c->frequency, bladerf_strerror(status));
         return status;
     }
@@ -109,7 +110,7 @@ static int radio_configure_module(struct bladerf *dev, struct module_config *c)
                 return status;
             }
             if (c->unified_gain < gain_range->min || c->unified_gain > gain_range->max){
-                fprintf(stderr, "Requested TX gain %d is outside supported range [%ld, %ld]\n",
+                fprintf(stderr, "Requested TX gain %d is outside supported range [%" PRId64 ", %" PRId64 "]\n",
                         c->unified_gain, gain_range->min, gain_range->max);
                 return BLADERF_ERR_RANGE;
             }
@@ -171,7 +172,7 @@ static int radio_configure_module(struct bladerf *dev, struct module_config *c)
                     return status;
                 }
                 if (c->unified_gain < gain_range->min || c->unified_gain > gain_range->max){
-                    fprintf(stderr, "Requested RX gain %d is outside supported range [%ld, %ld]\n",
+                    fprintf(stderr, "Requested RX gain %d is outside supported range [%" PRId64 ", %" PRId64 "]\n",
                             c->unified_gain, gain_range->min, gain_range->max);
                     return BLADERF_ERR_RANGE;
                 }
