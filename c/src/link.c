@@ -838,7 +838,7 @@ int link_receive_data(struct link_handle *link, int size, int max_timeouts,
 {
     int      bytes_received;
     int      bytes_remaining;
-    uint8_t *temp_buf;
+    uint8_t *temp_buf = NULL;
     int      i = 0;
     int      timeouts;
     int      timeout_ms;
