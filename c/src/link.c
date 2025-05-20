@@ -72,9 +72,9 @@ struct tx {
     struct ack_frame  ack_frame_buf;        //Input ack frame buffer
     bool              stop;                 //Signal to stop tx thread
     bool              data_buf_filled;      //Is the data frame buffer filled
-    pthread_t         thread;               //Transmitter thread
-    pthread_cond_t    data_buf_filled_cond; //pthread condition for data_buf_filled
-    pthread_mutex_t   data_buf_status_lock; //Mutex for data_buf_filled_cond
+    THREAD            thread;               //Transmitter thread
+    COND              data_buf_filled_cond; //condition for data_buf_filled
+    MUTEX             data_buf_status_lock; //Mutex for data_buf_filled_cond
     bool              link_on;              //Is the transmitter on
     bool              done;                 //Has the transmitter finished a transmission
     bool              success;              //Was the transmitter transmission successful
@@ -86,14 +86,14 @@ struct rx {
     uint8_t          *extra_bytes;          //Leftover bytes received but not returned to
                                             //the user after a call to link_receive_data()
     unsigned int      num_extra_bytes;      //Number of bytes in 'extra_bytes' buffer
-    pthread_t         thread;               //Receiver thread
+    THREAD            thread;               //Receiver thread
     bool              stop;                 //Signal to stop rx thread
     bool              data_buf_filled;      //Is the data frame buffer filled
-    pthread_cond_t    data_buf_filled_cond; //pthread condition for data_buf_filled
-    pthread_mutex_t   data_buf_status_lock; //mutex for data_buf_filled_cond
+    COND              data_buf_filled_cond; //condition for data_buf_filled
+    MUTEX             data_buf_status_lock; //mutex for data_buf_filled_cond
     bool              ack_buf_filled;       //Is the ack frame buffer filled
-    pthread_cond_t    ack_buf_filled_cond;  //pthread condition for ack_buf_filled
-    pthread_mutex_t   ack_buf_status_lock;  //mutex for ack_buf_filled_cond
+    COND              ack_buf_filled_cond;  //condition for ack_buf_filled
+    MUTEX             ack_buf_status_lock;  //mutex for ack_buf_filled_cond
     bool              link_on;              //Is the receiver on
 };
 
@@ -196,13 +196,13 @@ struct link_handle *link_init(struct bladerf *dev, struct radio_params *params, 
     link->tx->success         = false;
     link->tx->link_on         = false;
     //Initialize pthread condition variable
-    status = pthread_cond_init(&(link->tx->data_buf_filled_cond), NULL);
+    status = COND_INIT(&(link->tx->data_buf_filled_cond));
     if (status != 0){
         ERROR("Error initializing pthread_cond: %s\n", strerror(status));
         goto error;
     }
     //Initialize pthread mutex variable
-    status = pthread_mutex_init(&(link->tx->data_buf_status_lock), NULL);
+    status = MUTEX_INIT(&(link->tx->data_buf_status_lock));
     if (status != 0){
         ERROR("Error initializing pthread_mutex: %s\n", strerror(status));
         goto error;
@@ -226,25 +226,25 @@ struct link_handle *link_init(struct bladerf *dev, struct radio_params *params, 
         goto error;
     }
     //Initialize pthread condition variable for data
-    status = pthread_cond_init(&(link->rx->data_buf_filled_cond), NULL);
+    status = COND_INIT(&(link->rx->data_buf_filled_cond));
     if (status != 0){
         ERROR("Error initializing pthread_cond: %s\n", strerror(status));
         goto error;
     }
     //Initialize pthread mutex variable for data
-    status = pthread_mutex_init(&(link->rx->data_buf_status_lock), NULL);
+    status = MUTEX_INIT(&(link->rx->data_buf_status_lock));
     if (status != 0){
         ERROR("Error initializing pthread_mutex: %s\n", strerror(status));
         goto error;
     }
     //Initialize pthread condition variable for ack
-    status = pthread_cond_init(&(link->rx->ack_buf_filled_cond), NULL);
+    status = COND_INIT(&(link->rx->ack_buf_filled_cond));
     if (status != 0){
         ERROR("Error initializing pthread_cond: %s\n", strerror(status));
         goto error;
     }
     //Initialize pthread mutex variable for ack
-    status = pthread_mutex_init(&(link->rx->ack_buf_status_lock), NULL);
+    status = MUTEX_INIT(&(link->rx->ack_buf_status_lock));
     if (status != 0){
         ERROR("Error initializing pthread_mutex: %s\n", strerror(status));
         goto error;
@@ -296,11 +296,11 @@ void link_close(struct link_handle *link)
                     ERROR("TX: Error stopping link transmitter\n");
                 }
             }
-            status = pthread_mutex_destroy(&(link->tx->data_buf_status_lock));
+            status = MUTEX_DESTROY(&(link->tx->data_buf_status_lock));
             if (status != 0){
                 ERROR("TX: Error destroying data buf status pthread_mutex\n");
             }
-            status = pthread_cond_destroy(&(link->tx->data_buf_filled_cond));
+            status = COND_DESTROY(&(link->tx->data_buf_filled_cond));
             if (status != 0){
                 ERROR("TX: Error destroying data buf status pthread_cond\n");
             }
@@ -321,19 +321,19 @@ void link_close(struct link_handle *link)
             //sleep to prevent race condition where we potentially destroy a mutex that
             //was locked by receive_payload()
             usleep(300);
-            status = pthread_mutex_destroy(&(link->rx->data_buf_status_lock));
+            status = MUTEX_DESTROY(&(link->rx->data_buf_status_lock));
             if (status != 0){
                 ERROR("RX: Error destroying data buf status pthread_mutex\n");
             }
-            status = pthread_cond_destroy(&(link->rx->data_buf_filled_cond));
+            status = COND_DESTROY(&(link->rx->data_buf_filled_cond));
             if (status != 0){
                 ERROR("RX: Error destroying data buf status pthread_cond\n");
             }
-            status = pthread_mutex_destroy(&(link->rx->ack_buf_status_lock));
+            status = MUTEX_DESTROY(&(link->rx->ack_buf_status_lock));
             if (status != 0){
                 ERROR("RX: Error destroying ack buf status pthread_mutex\n");
             }
-            status = pthread_cond_destroy(&(link->rx->ack_buf_filled_cond));
+            status = COND_DESTROY(&(link->rx->ack_buf_filled_cond));
             if (status != 0){
                 ERROR("RX: Error destroying ack buf status pthread_cond\n");
             }
@@ -501,7 +501,7 @@ static int start_transmitter(struct link_handle *link)
     //be sure stop signal is off
     link->tx->stop    = false;
     //Kick off transmitter thread
-    status = pthread_create(&(link->tx->thread), NULL, transmit_data_frames, link);
+    status = THREAD_CREATE(&(link->tx->thread), transmit_data_frames, link);
     if (status != 0){
         ERROR("Error creating tx thread: %s\n", strerror(status));
         return -1;
@@ -525,20 +525,20 @@ static int stop_transmitter(struct link_handle *link)
     link->tx->stop = true;
     //Signal the buffer filled condition so the thread will stop waiting
     //for a filled buffer
-    status = pthread_mutex_lock(&(link->tx->data_buf_status_lock));
+    status = MUTEX_LOCK(&(link->tx->data_buf_status_lock));
     if (status != 0){
         ERROR("Error locking pthread_mutex\n");
     }
-    status = pthread_cond_signal(&(link->tx->data_buf_filled_cond));
+    status = COND_SIGNAL(&(link->tx->data_buf_filled_cond));
     if (status != 0){
         ERROR("Error signaling pthread_cond\n");
     }
-    status = pthread_mutex_unlock(&(link->tx->data_buf_status_lock));
+    status = MUTEX_UNLOCK(&(link->tx->data_buf_status_lock));
     if (status != 0){
         ERROR("Error unlocking pthread_mutex\n");
     }
     //Wait for tx thread to finish
-    status = pthread_join(link->tx->thread, NULL);
+    status = THREAD_JOIN(link->tx->thread, NULL);
     if (status != 0){
         ERROR("Error joining tx thread: %s\n", strerror(status));
         return -1;
@@ -628,17 +628,17 @@ static int send_payload(struct link_handle *link, uint8_t *payload,
     //Mark buffer filled
     link->tx->data_buf_filled = true;
     //Signal the buffer filled condition
-    status = pthread_mutex_lock(&(link->tx->data_buf_status_lock));
+    status = MUTEX_LOCK(&(link->tx->data_buf_status_lock));
     if (status != 0){
         ERROR("Error locking pthread_mutex: %s\n", strerror(status));
         return -1;
     }
-    status = pthread_cond_signal(&(link->tx->data_buf_filled_cond));
+    status = COND_SIGNAL(&(link->tx->data_buf_filled_cond));
     if (status != 0){
         ERROR("Error signaling pthread_cond: %s\n", strerror(status));
         return -1;
     }
-    status = pthread_mutex_unlock(&(link->tx->data_buf_status_lock));
+    status = MUTEX_UNLOCK(&(link->tx->data_buf_status_lock));
     if (status != 0){
         ERROR("Error unlocking pthread_mutex: %s\n", strerror(status));
         return -1;
@@ -698,7 +698,7 @@ void *transmit_data_frames(void *arg)
         if (tries == 1){
             //---------Wait for data buffer to be filled-----------
             //Lock mutex
-            status = pthread_mutex_lock(&(link->tx->data_buf_status_lock));
+            status = MUTEX_LOCK(&(link->tx->data_buf_status_lock));
             if (status != 0){
                 ERROR("Mutex lock failed: %s\n", strerror(status));
                 goto out;
@@ -707,7 +707,7 @@ void *transmit_data_frames(void *arg)
             failed = false;
             while (!link->tx->data_buf_filled && !link->tx->stop){
                 DEBUG_MSG("TX: Waiting for buffer to be filled\n");
-                status = pthread_cond_wait(&(link->tx->data_buf_filled_cond),
+                status = COND_WAIT(&(link->tx->data_buf_filled_cond),
                                             &(link->tx->data_buf_status_lock));
                 if (status != 0){
                     ERROR("%s(): Condition wait failed: %s\n", __FUNCTION__,
@@ -717,7 +717,7 @@ void *transmit_data_frames(void *arg)
                 }
             }
             //Unlock mutex
-            status = pthread_mutex_unlock(&(link->tx->data_buf_status_lock));
+            status = MUTEX_UNLOCK(&(link->tx->data_buf_status_lock));
             if (status != 0){
                 ERROR("%s(): Mutex unlock failed: %s\n", __FUNCTION__, strerror(status));
                 failed = true;
@@ -800,7 +800,7 @@ static int start_receiver(struct link_handle *link)
     //be sure stop signal is off
     link->rx->stop = false;
     //Kick off receiver thread
-    status = pthread_create(&(link->rx->thread), NULL, receive_frames, link);
+    status = THREAD_CREATE(&(link->rx->thread), receive_frames, link);
     if (status != 0){
         ERROR("Error creating rx thread: %s\n", strerror(status));
         return -1;
@@ -824,7 +824,7 @@ static int stop_receiver(struct link_handle *link)
     link->rx->stop = true;
 
     //Wait for rx thread to finish
-    status = pthread_join(link->rx->thread, NULL);
+    status = THREAD_JOIN(link->rx->thread, NULL);
     if (status != 0){
         ERROR("Error joining rx thread: %s\n", strerror(status));
         return -1;
@@ -984,8 +984,8 @@ static int receive_payload(struct link_handle *link, uint8_t *payload, int timeo
         }
     }
 
-    //Prepare to wait with pthread_cond_timedwait()
-    status = pthread_mutex_lock(&(link->rx->data_buf_status_lock));
+    //Prepare to wait with COND_TIMED_WAIT()
+    status = MUTEX_LOCK(&(link->rx->data_buf_status_lock));
     if (status != 0){
         ERROR("RX: %s(): Error locking mutex: %s\n", __FUNCTION__, strerror(status));
         return -1;
@@ -999,8 +999,8 @@ static int receive_payload(struct link_handle *link, uint8_t *payload, int timeo
 
         if (timeout_ms >= 0){
             //Wait for timeout
-            status = pthread_cond_timedwait(&(link->rx->data_buf_filled_cond),
-                                            &(link->rx->data_buf_status_lock), &timeout_abs);
+            status = COND_TIMED_WAIT(&(link->rx->data_buf_filled_cond),
+                                            &(link->rx->data_buf_status_lock), timeout_ms);
             if (status != 0){
                 if (status == ETIMEDOUT){
                     used_payload_length = -2;
@@ -1013,7 +1013,7 @@ static int receive_payload(struct link_handle *link, uint8_t *payload, int timeo
             }
         }else{
             //Wait forever (or until receiver signals condition during shutdown)
-            status = pthread_cond_wait(&(link->rx->data_buf_filled_cond),
+            status = COND_WAIT(&(link->rx->data_buf_filled_cond),
                                        &(link->rx->data_buf_status_lock));
             if (status != 0) {
                 ERROR("RX: %s(): Condition wait failed: %s\n", __FUNCTION__,
@@ -1039,7 +1039,7 @@ static int receive_payload(struct link_handle *link, uint8_t *payload, int timeo
 
     out:
         //Unlock mutex on link->rx->data_buf_filled
-        status = pthread_mutex_unlock(&(link->rx->data_buf_status_lock));
+        status = MUTEX_UNLOCK(&(link->rx->data_buf_status_lock));
         if (status != 0){
             ERROR("RX: %s(): Mutex unlock failed: %s\n", __FUNCTION__, strerror(status));
             used_payload_length = -1;
@@ -1071,16 +1071,16 @@ static int receive_ack(struct link_handle *link, uint16_t ack_num, unsigned int 
         return -1;
     }
 
-    //Prepare to wait with pthread_cond_timedwait()
-    status = pthread_mutex_lock(&(link->rx->ack_buf_status_lock));
+    //Prepare to wait with COND_TIMED_WAIT()
+    status = MUTEX_LOCK(&(link->rx->ack_buf_status_lock));
     if (status != 0){
         ERROR("RX: %s(): Error locking mutex: %s\n", __FUNCTION__, strerror(status));
         return -1;
     }
     //Wait for condition signal - meaning buffer is full
     while (!link->rx->ack_buf_filled){
-        status = pthread_cond_timedwait(&(link->rx->ack_buf_filled_cond),
-                                        &(link->rx->ack_buf_status_lock), &timeout_abs);
+        status = COND_TIMED_WAIT(&(link->rx->ack_buf_filled_cond),
+                                        &(link->rx->ack_buf_status_lock), timeout_ms);
         if (status != 0){
             if (status == ETIMEDOUT){
                 ret = -2;
@@ -1102,7 +1102,7 @@ static int receive_ack(struct link_handle *link, uint16_t ack_num, unsigned int 
     link->rx->ack_buf_filled = false;
 
     //unlock mutex after modifying link->rx->ack_buf_filled
-    status = pthread_mutex_unlock(&(link->rx->ack_buf_status_lock));
+    status = MUTEX_UNLOCK(&(link->rx->ack_buf_status_lock));
     if (status != 0){
         ERROR("RX: %s(): Mutex unlock failed: %s\n", __FUNCTION__, strerror(status));
         ret = -1;
@@ -1219,19 +1219,19 @@ void *receive_frames(void *arg)
                     //Mark buffer filled if not a duplicate data frame
                     if (!duplicate){
                         //Mark shared buffer status as filled via mutex lock
-                        status = pthread_mutex_lock(&(link->rx->data_buf_status_lock));
+                        status = MUTEX_LOCK(&(link->rx->data_buf_status_lock));
                         if (status != 0){
                             ERROR("RX: %s(): Error locking pthread_mutex\n", __FUNCTION__);
                             return NULL;
                         }
                         link->rx->data_buf_filled = true;
                         //Signal that the link data buffer is filled
-                        status = pthread_cond_signal(&(link->rx->data_buf_filled_cond));
+                        status = COND_SIGNAL(&(link->rx->data_buf_filled_cond));
                         if (status != 0){
                             ERROR("RX: %s(): Error signaling pthread_cond\n", __FUNCTION__);
                             return NULL;
                         }
-                        status = pthread_mutex_unlock(&(link->rx->data_buf_status_lock));
+                        status = MUTEX_UNLOCK(&(link->rx->data_buf_status_lock));
                         if (status != 0){
                             ERROR("RX: %s(): Error unlocking pthread_mutex\n", __FUNCTION__);
                             return NULL;
@@ -1253,18 +1253,18 @@ void *receive_frames(void *arg)
                     //Release buffer from the phy
                     phy_release_rx_buf(link->phy);
                     //Signal that the link ack buffer is filled
-                    status = pthread_mutex_lock(&(link->rx->ack_buf_status_lock));
+                    status = MUTEX_LOCK(&(link->rx->ack_buf_status_lock));
                     if (status != 0){
                         ERROR("RX: %s(): Error locking pthread_mutex\n", __FUNCTION__);
                         return NULL;
                     }
                     link->rx->ack_buf_filled = true;
-                    status = pthread_cond_signal(&(link->rx->ack_buf_filled_cond));
+                    status = COND_SIGNAL(&(link->rx->ack_buf_filled_cond));
                     if (status != 0){
                         ERROR("RX: %s(): Error signaling pthread_cond\n", __FUNCTION__);
                         return NULL;
                     }
-                    status = pthread_mutex_unlock(&(link->rx->ack_buf_status_lock));
+                    status = MUTEX_UNLOCK(&(link->rx->ack_buf_status_lock));
                     if (status != 0){
                         ERROR("RX: %s(): Error unlocking pthread_mutex\n", __FUNCTION__);
                         return NULL;
@@ -1307,17 +1307,17 @@ void *receive_frames(void *arg)
 
     //In case receive_payload() is stuck on its condition wait, signal condition that RX
     //data buffer is filled to break it out of the condition wait
-    status = pthread_mutex_lock(&(link->rx->data_buf_status_lock));
+    status = MUTEX_LOCK(&(link->rx->data_buf_status_lock));
     if (status != 0){
         ERROR("RX: %s(): Error locking pthread_mutex\n", __FUNCTION__);
         return NULL;
     }
-    status = pthread_cond_signal(&(link->rx->data_buf_filled_cond));
+    status = COND_SIGNAL(&(link->rx->data_buf_filled_cond));
     if (status != 0){
         ERROR("RX: %s(): Error signaling pthread_cond\n", __FUNCTION__);
         return NULL;
     }
-    status = pthread_mutex_unlock(&(link->rx->data_buf_status_lock));
+    status = MUTEX_UNLOCK(&(link->rx->data_buf_status_lock));
     if (status != 0){
         ERROR("RX: %s(): Error unlocking pthread_mutex\n", __FUNCTION__);
         return NULL;

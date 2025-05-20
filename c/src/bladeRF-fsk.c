@@ -25,7 +25,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
-#include <pthread.h>
+#include "thread.h"
 #include <math.h>
 #include <libbladeRF.h>
 
@@ -38,13 +38,13 @@ struct bladerf_fsk_handle {
     struct {
         FILE     *in;
         long int  filesize;
-        pthread_t thread;
+        THREAD    thread;
         bool      stop;
         bool      on;
     } tx;
     struct {
         FILE     *out;
-        pthread_t thread;
+        THREAD    thread;
         bool      stop;
         bool      on;
     } rx;
@@ -225,7 +225,7 @@ struct bladerf_fsk_handle *start(struct config *config)
     }
 
     //Start the receiver thread
-    status = pthread_create(&(handle->rx.thread), NULL, receiver, handle);
+    status = THREAD_CREATE(&(handle->rx.thread), receiver, handle);
     if (status != 0){
         fprintf(stderr, "Couldn't create rx thread: %s\n", strerror(status));
         goto error;
@@ -233,7 +233,7 @@ struct bladerf_fsk_handle *start(struct config *config)
     handle->rx.on = true;
 
     //Start the sender thread
-    status = pthread_create(&(handle->tx.thread), NULL, sender, handle);
+    status = THREAD_CREATE(&(handle->tx.thread), sender, handle);
     if (status != 0){
         fprintf(stderr, "Couldn't create tx thread: %s\n", strerror(status));
         goto error;
@@ -260,7 +260,7 @@ void stop(struct bladerf_fsk_handle *handle)
         //Stop tx thread if on
         if (handle->tx.on){
             handle->tx.stop = true;
-            status = pthread_join(handle->tx.thread, NULL);
+            status = THREAD_JOIN(handle->tx.thread, NULL);
             if (status != 0){
                 fprintf(stderr, "Error joining tx thread: %s\n", strerror(status));
             }
@@ -275,7 +275,7 @@ void stop(struct bladerf_fsk_handle *handle)
             //so that calls to link_receive_data() will return
             link_close(handle->link);
 
-            status = pthread_join(handle->rx.thread, NULL);
+            status = THREAD_JOIN(handle->rx.thread, NULL);
             if (status != 0){
                 fprintf(stderr, "Error joining rx thread: %s\n", strerror(status));
             }
@@ -348,7 +348,7 @@ int main(int argc, char *argv[])
     }
 
     //Wait for TX thread function to end - meaning tx file ended
-    status = pthread_join(handle->tx.thread, NULL);
+    status = THREAD_JOIN(handle->tx.thread, NULL);
     if (status != 0){
         fprintf(stderr, "Error joining tx thread\n");
     }

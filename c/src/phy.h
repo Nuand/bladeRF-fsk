@@ -41,10 +41,10 @@
 #include <stdbool.h>
 #include <libbladeRF.h>
 #include <string.h>
-#include <pthread.h>
 #include <errno.h>
 #include <math.h>
 #include <unistd.h>
+#include "thread.h"
 
 #include "common.h"
 #include "utils.h"

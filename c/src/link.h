@@ -33,9 +33,9 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include <pthread.h>
 #include <time.h>
 #include <errno.h>
+#include "thread.h"
 #include <libbladeRF.h>
 
 #include "common.h"

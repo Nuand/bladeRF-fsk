@@ -74,9 +74,9 @@ struct rx {
     uint8_t               *data_buf;        //received data output buffer (no training/preamble)
     bool                   buf_filled;      //is the rx data buffer filled
     bool                   stop;            //control variable to stop the receiver
-    pthread_t              thread;          //pthread for the receiver
-    pthread_cond_t         buf_filled_cond; //condition variable for buf_filled
-    pthread_mutex_t        buf_status_lock; //mutex variable for accessing buf_filled
+    THREAD                 thread;          //Receiver thread
+    COND                   buf_filled_cond; //condition variable for buf_filled
+    MUTEX                  buf_status_lock; //mutex for accessing buf_filled
     bool                   overrun;         //True if receiver experienced RX sample overruns
     #ifdef LOG_RX_SAMPLES
         FILE              *samples_file;
@@ -87,9 +87,9 @@ struct tx {
     unsigned int           data_length;   //length of data to transmit (not including preamble)
     bool                   buf_filled;
     bool                   stop;
-    pthread_t              thread;
-    pthread_cond_t         buf_filled_cond;
-    pthread_mutex_t        buf_status_lock;
+    THREAD                 thread;
+    COND                   buf_filled_cond;
+    MUTEX                  buf_status_lock;
     unsigned int           max_num_samples; //Maximum number of tx samples to transmit
     struct complex_sample *samples;         //output samples to transmit
     #ifdef LOG_TX_SAMPLES
@@ -206,14 +206,14 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params,
     phy->tx->data_length = 0;
     phy->tx->buf_filled  = false;
     phy->tx->stop        = false;
-    //Initialize pthread condition variable for buf_filled
-    status = pthread_cond_init(&(phy->tx->buf_filled_cond), NULL);
+    //Initialize condition variable for buf_filled
+    status = COND_INIT(&(phy->tx->buf_filled_cond));
     if (status != 0){
         ERROR("%s: Error initializing pthread_cond\n", __FUNCTION__);
         goto error;
     }
-    //Initialize pthread mutex variable for buf_filled
-    status = pthread_mutex_init(&(phy->tx->buf_status_lock), NULL);
+    //Initialize mutex variable for buf_filled
+    status = MUTEX_INIT(&(phy->tx->buf_status_lock));
     if (status != 0){
         ERROR("%s: Error initializing pthread_mutex\n", __FUNCTION__);
         goto error;
@@ -308,14 +308,14 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params,
     //Initialize control variables
     phy->rx->buf_filled = false;
     phy->rx->stop       = false;
-    //Initialize pthread condition variable for buf_filled
-    status = pthread_cond_init(&(phy->rx->buf_filled_cond), NULL);
+    //Initialize condition variable for buf_filled
+    status = COND_INIT(&(phy->rx->buf_filled_cond));
     if (status != 0){
         ERROR("%s: Error initializing pthread_cond\n", __FUNCTION__);
         goto error;
     }
-    //Initialize pthread mutex variable for buf_filled
-    status = pthread_mutex_init(&(phy->rx->buf_status_lock), NULL);
+    //Initialize mutex variable for buf_filled
+    status = MUTEX_INIT(&(phy->rx->buf_status_lock));
     if (status != 0){
         ERROR("%s: Error initializing pthread_mutex\n", __FUNCTION__);
         goto error;
@@ -387,11 +387,11 @@ void phy_close(struct phy_handle *phy)
             #endif
             free(phy->tx->data_buf);
             free(phy->tx->samples);
-            status = pthread_mutex_destroy(&(phy->tx->buf_status_lock));
+            status = MUTEX_DESTROY(&(phy->tx->buf_status_lock));
             if (status != 0){
                 ERROR("%s: Error destroying pthread_mutex\n", __FUNCTION__);
             }
-            status = pthread_cond_destroy(&(phy->tx->buf_filled_cond));
+            status = COND_DESTROY(&(phy->tx->buf_filled_cond));
             if (status != 0){
                 ERROR("%s: Error destroying pthread_cond\n", __FUNCTION__);
             }
@@ -413,11 +413,11 @@ void phy_close(struct phy_handle *phy)
             free(phy->rx->pnorm_samples[0]);
             free(phy->rx->pnorm_samples[1]);
             free(phy->rx->est_power);
-            status = pthread_mutex_destroy(&(phy->rx->buf_status_lock));
+            status = MUTEX_DESTROY(&(phy->rx->buf_status_lock));
             if (status != 0){
                 ERROR("%s: Error destroying pthread_mutex\n", __FUNCTION__);
             }
-            status = pthread_cond_destroy(&(phy->rx->buf_filled_cond));
+            status = COND_DESTROY(&(phy->rx->buf_filled_cond));
             if (status != 0){
                 ERROR("%s: Error destroying pthread_cond\n", __FUNCTION__);
             }
@@ -442,7 +442,7 @@ int phy_start_transmitter(struct phy_handle *phy)
     //turn off stop signal
     phy->tx->stop = false;
     //Kick off frame transmitter thread
-    status = pthread_create(&(phy->tx->thread), NULL, phy_transmit_frames, phy);
+    status = THREAD_CREATE(&(phy->tx->thread), phy_transmit_frames, phy);
     if (status != 0){
         ERROR("%s: Error creating tx thread: %s\n", __FUNCTION__, strerror(status));
         return -1;
@@ -459,20 +459,20 @@ int phy_stop_transmitter(struct phy_handle *phy)
     phy->tx->stop = true;
     //Signal the buffer filled condition so that the thread will stop
     //waiting for a filled buffer
-    status = pthread_mutex_lock(&(phy->tx->buf_status_lock));
+    status = MUTEX_LOCK(&(phy->tx->buf_status_lock));
     if (status != 0){
         ERROR("%s: Error locking pthread_mutex\n", __FUNCTION__);
     }
-    status = pthread_cond_signal(&(phy->tx->buf_filled_cond));
+    status = COND_SIGNAL(&(phy->tx->buf_filled_cond));
     if (status != 0){
         ERROR("%s: Error signaling pthread_cond\n", __FUNCTION__);
     }
-    status = pthread_mutex_unlock(&(phy->tx->buf_status_lock));
+    status = MUTEX_UNLOCK(&(phy->tx->buf_status_lock));
     if (status != 0){
         ERROR("%s: Error unlocking pthread_mutex\n", __FUNCTION__);
     }
     //Wait for tx thread to finish
-    status = pthread_join(phy->tx->thread, NULL);
+    status = THREAD_JOIN(phy->tx->thread, NULL);
     if (status != 0){
         ERROR("%s: Error joining tx thread: %s\n", __FUNCTION__, strerror(status));
         return -1;
@@ -497,7 +497,7 @@ int phy_fill_tx_buf(struct phy_handle *phy, uint8_t *data_buf, unsigned int leng
         return -1;
     }
     //Wait for the buffer to be empty (and therefore ready for the next frame)
-    //Not doing a pthread_cond_wait() because this shouldn't take long
+    //Not doing a COND_WAIT() because this shouldn't take long
     while(phy->tx->buf_filled){
         usleep(50);
     }
@@ -508,18 +508,18 @@ int phy_fill_tx_buf(struct phy_handle *phy, uint8_t *data_buf, unsigned int leng
     phy->tx->data_length = length;
 
     //Mark buffer filled and signal the buffer filled condition
-    status = pthread_mutex_lock(&(phy->tx->buf_status_lock));
+    status = MUTEX_LOCK(&(phy->tx->buf_status_lock));
     if (status != 0){
         ERROR("%s: Error locking pthread_mutex\n", __FUNCTION__);
         return -1;
     }
     phy->tx->buf_filled = true;
-    status = pthread_cond_signal(&(phy->tx->buf_filled_cond));
+    status = COND_SIGNAL(&(phy->tx->buf_filled_cond));
     if (status != 0){
         ERROR("%s: Error signaling pthread_cond\n", __FUNCTION__);
         return -1;
     }
-    status = pthread_mutex_unlock(&(phy->tx->buf_status_lock));
+    status = MUTEX_UNLOCK(&(phy->tx->buf_status_lock));
     if (status != 0){
         ERROR("%s: Error unlocking pthread_mutex\n", __FUNCTION__);
         return -1;
@@ -557,7 +557,7 @@ void *phy_transmit_frames(void *arg)
     while (!phy->tx->stop){
         //--------Wait for buffer to be filled---------
         //Lock mutex
-        status = pthread_mutex_lock(&(phy->tx->buf_status_lock));
+        status = MUTEX_LOCK(&(phy->tx->buf_status_lock));
         if (status != 0){
             ERROR("%s: Mutex lock failed: %s\n", __FUNCTION__, strerror(status));
             goto out;
@@ -565,7 +565,7 @@ void *phy_transmit_frames(void *arg)
         //Wait for condition signal - meaning buffer is full
         while (!phy->tx->buf_filled && !phy->tx->stop){
             DEBUG_MSG("TX: Waiting for buffer to be filled\n");
-            status = pthread_cond_wait(&(phy->tx->buf_filled_cond), &(phy->tx->buf_status_lock));
+            status = COND_WAIT(&(phy->tx->buf_filled_cond), &(phy->tx->buf_status_lock));
             if (status != 0){
                 ERROR("%s: Condition wait failed: %s\n", __FUNCTION__, strerror(status));
                 failed = true;
@@ -576,7 +576,7 @@ void *phy_transmit_frames(void *arg)
         if (phy->tx->stop || failed){
             phy->tx->buf_filled = false;
             //Unlock mutex
-            status = pthread_mutex_unlock(&(phy->tx->buf_status_lock));
+            status = MUTEX_UNLOCK(&(phy->tx->buf_status_lock));
             if (status != 0){
                 ERROR("%s: Mutex unlock failed: %s\n", __FUNCTION__, strerror(status));
                 failed = true;
@@ -615,7 +615,7 @@ void *phy_transmit_frames(void *arg)
         phy->tx->buf_filled = false;
 
         //Unlock mutex now that we have marked the buffer empty
-        status = pthread_mutex_unlock(&(phy->tx->buf_status_lock));
+        status = MUTEX_UNLOCK(&(phy->tx->buf_status_lock));
         if (status != 0){
             ERROR("%s: Mutex unlock failed: %s\n", __FUNCTION__, strerror(status));
             failed = true;
@@ -741,7 +741,7 @@ int phy_start_receiver(struct phy_handle *phy)
     //reset debug status
     phy->rx->overrun = false;
     //Kick off frame receiver thread
-    status = pthread_create(&(phy->rx->thread), NULL, phy_receive_frames, phy);
+    status = THREAD_CREATE(&(phy->rx->thread), phy_receive_frames, phy);
     if (status != 0){
         ERROR("%s: Error creating rx thread: %s\n", __FUNCTION__, strerror(status));
         return -1;
@@ -757,7 +757,7 @@ int phy_stop_receiver(struct phy_handle *phy)
     //signal stop
     phy->rx->stop = true;
     //Wait for rx thread to finish
-    status = pthread_join(phy->rx->thread, NULL);
+    status = THREAD_JOIN(phy->rx->thread, NULL);
     if (status != 0){
         ERROR("%s: Error joining rx thread: %s\n", __FUNCTION__, strerror(status));
         return -1;
@@ -784,15 +784,15 @@ uint8_t *phy_request_rx_buf(struct phy_handle *phy, unsigned int timeout_ms)
     }
 
     //Lock mutex
-    status = pthread_mutex_lock(&(phy->rx->buf_status_lock));
+    status = MUTEX_LOCK(&(phy->rx->buf_status_lock));
     if (status != 0){
         ERROR("%s: Error locking mutex: %s\n", __FUNCTION__, strerror(status));
         return NULL;
     }
     //Wait for condition signal - meaning buffer is full
     while (!phy->rx->buf_filled){
-        status = pthread_cond_timedwait(&(phy->rx->buf_filled_cond),
-                                        &(phy->rx->buf_status_lock), &timeout_abs);
+        status = COND_TIMED_WAIT(&(phy->rx->buf_filled_cond),
+                                        &(phy->rx->buf_status_lock), timeout_ms);
         if (status != 0){
             if (status == ETIMEDOUT){
                 //DEBUG_MSG("phy_request_rx_buf(): Condition wait timed out\n");
@@ -804,7 +804,7 @@ uint8_t *phy_request_rx_buf(struct phy_handle *phy, unsigned int timeout_ms)
         }
     }
     //Unlock mutex
-    status = pthread_mutex_unlock(&(phy->rx->buf_status_lock));
+    status = MUTEX_UNLOCK(&(phy->rx->buf_status_lock));
     if (status != 0){
         ERROR("%s: Mutex unlock failed: %s\n", __FUNCTION__, strerror(status));
         failed = true;
@@ -1242,18 +1242,18 @@ void *phy_receive_frames(void *arg)
                     //Copy frame into rx_data_buf
                     memcpy(phy->rx->data_buf, rx_buffer, frame_length);
                     //Signal that the buffer is filled
-                    status = pthread_mutex_lock(&(phy->rx->buf_status_lock));
+                    status = MUTEX_LOCK(&(phy->rx->buf_status_lock));
                     if (status != 0){
                         ERROR("%s: Error locking pthread_mutex\n", __FUNCTION__);
                         goto out;
                     }
                     phy->rx->buf_filled = true;
-                    status = pthread_cond_signal(&(phy->rx->buf_filled_cond));
+                    status = COND_SIGNAL(&(phy->rx->buf_filled_cond));
                     if (status != 0){
                         ERROR("%s: Error signaling pthread_cond\n", __FUNCTION__);
                         goto out;
                     }
-                    status = pthread_mutex_unlock(&(phy->rx->buf_status_lock));
+                    status = MUTEX_UNLOCK(&(phy->rx->buf_status_lock));
                     if (status != 0){
                         ERROR("%s: Error unlocking pthread_mutex\n", __FUNCTION__);
                         goto out;
