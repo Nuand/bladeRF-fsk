@@ -41,7 +41,7 @@ rigorous modem.
 
 ## Build Instructions ##
 
-The program may be built/installed as host software that uses libbladeRF. Follow the
+The program builds/installs as part of the main bladeRF host software. Follow the
 instructions listed on the [wiki]. Instructions to build from the source can also be found
 in the [host README].
 
@@ -175,7 +175,7 @@ the program. Try adjusting the gains and run it again.
    Occassionally when AGC is enabled, the AGC reacts too quickly after the frame ends,
    gaining up the noise and causing the noise power estimate to be too high.
 
-4) The program currently does not support Windows, only Linux/OSX
+4) The program currently does not support Windows
 
 ## Troubleshooting ##
 Is the FSK modem not working for you? Here are some troubleshooting steps:
@@ -282,3 +282,16 @@ The training sequence allows time for power normalization and any automatic gain
 to settle.
 
 A preamble is used for synchronization.
+
+## Commit Guidelines ##
+Commit messages in this repository use the following guidelines:
+* the first line of the message is a concise summary prefixed with the section/function of code that has changed. If multiple portions have changed, use multiple prefixes separated by commas. Use the following prefixes:
+  * `link:` changes to link.c/h, crc32.c/h
+  * `phy:` changes to  phy.c/h, radio_config.c/h, fsk.c/h, fir_filter.c/h, rx_ch_filter.h, pnorm.c/h, correlator.c/h, prng.c/h
+  * `doc:` changes to README.md
+  * `test:` changes to test_suite.c
+  * `ui:` changes to config.c/h and bladeRF-fsk.c
+  * `cmake:` changes to CMakeLists.txt
+  * `model:` changes to files in the matlab/ folder
+  * `misc:` changes to utils.c/h, or something that doesn't fit well into another category
+* each line of the message is <=80 characters wide
