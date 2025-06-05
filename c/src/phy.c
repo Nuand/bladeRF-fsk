@@ -850,13 +850,13 @@ void *phy_receive_frames(void *arg)
                                             //buffer
     uint64_t                corr_samp_idx;          //correlator output index/timestamp
     bool                    preamble_detected;
-    bool                    new_frame;
-    bool                    checked_frame_type;     //have we checked frame type yet?
+    bool                    new_frame = false;
+    bool                    checked_frame_type = false;     //have we checked frame type yet?
     int                     frame_length = 0;       //link layer frame length
     uint8_t                *rx_buffer = NULL;       //local rx data buffer
     uint8_t                 frame_type;
     struct bladerf_metadata metadata;               //bladerf metadata for sync_rx()
-    unsigned int            num_bytes_to_demod;
+    unsigned int            num_bytes_to_demod = 0;
     //actual number of samples RX'd from bladerf_sync_rx()
     unsigned int            num_samples_rx_act;
     //actual number of samples output from FIR filter post decimation into each buffer
@@ -936,10 +936,12 @@ void *phy_receive_frames(void *arg)
     data_idx             = 0;
     samp_idx             = 0;
     samp_buf_sel         = 0;
+    samp_buf_idx         = 0;
     snr_est_avg          = 0;
     waiting_on_snr_est   = false;
     already_rxd_next_buf = false;
     state                = RECEIVE;
+    next_state           = RECEIVE;
     //Loop until stop signal detected
     while(!phy->rx->stop){
         switch(state){
