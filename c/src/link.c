@@ -162,7 +162,7 @@ struct link_handle *link_init(struct bladerf *dev, struct radio_params *params, 
         goto error;
     }
     //Start phy receiver
-    status = phy_start_receiver(link->phy);
+    status = phy_start_receiver(link->phy, 0);
     if (status != 0){
         ERROR("Couldn't start phy recevier\n");
         goto error;

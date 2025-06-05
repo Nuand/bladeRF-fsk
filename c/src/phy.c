@@ -78,6 +78,8 @@ struct rx {
     COND                   buf_filled_cond; //condition variable for buf_filled
     MUTEX                  buf_status_lock; //mutex for accessing buf_filled
     bool                   overrun;         //True if receiver experienced RX sample overruns
+    unsigned int           warmup_cnt;      //Number of initial sync_rx calls where overrun
+                                            //will be not flagged. Set to 0 to disable
     #ifdef LOG_RX_SAMPLES
         FILE              *samples_file;
     #endif
@@ -732,14 +734,15 @@ static void create_ramps(unsigned int ramp_length, struct complex_sample ramp_do
  *                                      *
  ****************************************/
 
-int phy_start_receiver(struct phy_handle *phy)
+int phy_start_receiver(struct phy_handle *phy, unsigned int warmup_cnt)
 {
     int status;
 
     //turn off stop signal
-    phy->rx->stop    = false;
+    phy->rx->stop       = false;
     //reset debug status
-    phy->rx->overrun = false;
+    phy->rx->overrun    = false;
+    phy->rx->warmup_cnt = warmup_cnt;
     //Kick off frame receiver thread
     status = THREAD_CREATE(&(phy->rx->thread), phy_receive_frames, phy);
     if (status != 0){
@@ -872,6 +875,7 @@ void *phy_receive_frames(void *arg)
     #endif
     int                     num_samples_proc;  //num samps processed by fsk_demod())
     bool                    already_rxd_next_buf;
+    unsigned int            rx_call_cnt = 0;
 
     #ifndef SYNC_NO_METADATA
         uint64_t            timestamp = UINT64_MAX;
@@ -968,9 +972,11 @@ void *phy_receive_frames(void *arg)
                     #else
                         status = bladerf_sync_rx(phy->dev, phy->rx->in_samples,
                                                  NUM_SAMPLES_RX, &metadata, 5000);
+                        rx_call_cnt++;
                         if (status != 0){
-                            ERROR("RX: %s: Couldn't receive samples from bladeRF: %s\n",
-                                  __FUNCTION__, bladerf_strerror(status));
+                            ERROR("RX: %s: Couldn't receive samples from bladeRF on "
+                                  "sync_rx call %u: %s\n",
+                                  __FUNCTION__, rx_call_cnt, bladerf_strerror(status));
                             goto out;
                         }
                         #ifdef SYNC_NO_METADATA
@@ -978,14 +984,23 @@ void *phy_receive_frames(void *arg)
                         #else
                             //Check metadata
                             if (metadata.status & BLADERF_META_STATUS_OVERRUN){
-                                NOTE("RX: %s: Got an overrun. Expected count = %u; actual count = %u.\n",
-                                     __FUNCTION__, NUM_SAMPLES_RX, metadata.actual_count);
-                                phy->rx->overrun = true;
+                                NOTE("RX: %s: Got an overrun on sync_rx call %u. "
+                                     "Expected count = %u; actual count = %u.\n",
+                                     __FUNCTION__, rx_call_cnt, NUM_SAMPLES_RX,
+                                     metadata.actual_count);
+                                if(rx_call_cnt > phy->rx->warmup_cnt){
+                                    //wait for warmup time before reporting overrun
+                                    //warning
+                                    phy->rx->overrun = true;
+                                }
                             }
+
                             num_samples_rx_act = metadata.actual_count;
                             if (timestamp != UINT64_MAX && metadata.timestamp != timestamp+NUM_SAMPLES_RX){
-                                NOTE("RX: %s: Unexpected timestamp. Expected %lu, got %lu.\n",
-                                     __FUNCTION__, timestamp+NUM_SAMPLES_RX, metadata.timestamp);
+                                NOTE("RX: %s: Unexpected timestamp on sync_rx call %u. "
+                                     "Expected %lu, got %lu.\n",
+                                     __FUNCTION__, rx_call_cnt, timestamp+NUM_SAMPLES_RX,
+                                     metadata.timestamp);
                             }
                             timestamp = metadata.timestamp;
                         #endif

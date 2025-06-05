@@ -130,11 +130,16 @@ int phy_fill_tx_buf(struct phy_handle *phy, uint8_t *data_buf, unsigned int leng
 /**
  * Start the PHY receiver  thread
  *
- * @param[in]   phy     pointer to phy_handle struct
+ * @param[in]   phy           pointer to phy_handle struct
+ * @param[in]   warmup_cnt    number of initial calls to bladerf_sync_rx() where overrun
+ *                            will not be flagged and reported as a warning when
+ *                            phy_stop_receiver() is called. Some initial overruns may be
+ *                            expected depending on the system. Suggest 5. Set to 0 to
+ *                            disable.
  *
  * @return      0 on success, -1 on failure
  */
-int phy_start_receiver(struct phy_handle *phy);
+int phy_start_receiver(struct phy_handle *phy, unsigned int warmup_cnt);
 
 /**
  * Stop the PHY receiver thread
