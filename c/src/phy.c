@@ -843,20 +843,20 @@ void *phy_receive_frames(void *arg)
     unsigned int            num_bytes_rx;
     unsigned int            data_idx;   //Current index of rx_buffer to receive new bytes
                                         //on. doubles as the current received frame length
-    uint64_t                samp_buf_idx;   //Current index of pnorm samples buffer to
+    uint64_t                samp_buf_idx = 0; //Current index of pnorm samples buffer to
                                             //correlate/demod samples from
     uint64_t                samp_idx;       //Total running samples index/timestamp, after
                                             //decimation. Marks the 1st sample in current
                                             //buffer
     uint64_t                corr_samp_idx;          //correlator output index/timestamp
     bool                    preamble_detected;
-    bool                    new_frame;
-    bool                    checked_frame_type;     //have we checked frame type yet?
+    bool                    new_frame = true;
+    bool                    checked_frame_type = false; //have we checked frame type yet?
     int                     frame_length = 0;       //link layer frame length
     uint8_t                *rx_buffer = NULL;       //local rx data buffer
     uint8_t                 frame_type;
     struct bladerf_metadata metadata;               //bladerf metadata for sync_rx()
-    unsigned int            num_bytes_to_demod;
+    unsigned int            num_bytes_to_demod = 0;
     //actual number of samples RX'd from bladerf_sync_rx()
     unsigned int            num_samples_rx_act;
     //actual number of samples output from FIR filter post decimation into each buffer
@@ -886,7 +886,7 @@ void *phy_receive_frames(void *arg)
     enum states {RECEIVE, PREAMBLE_CORRELATE, DEMOD, CHECK_FRAME_TYPE, DECODE,
                  ESTIMATE_SNR, COPY};
     enum states state;          //current state variable
-    enum states next_state;     //stored next state, only needed for ESTIMATE_SNR
+    enum states next_state = RECEIVE; //stored next state, only needed for ESTIMATE_SNR
 
     //corr_process() takes a size_t count. Ensure a cast from uint64_t to size_t is valid
     assert(NUM_SAMPLES_RX < SIZE_MAX);
