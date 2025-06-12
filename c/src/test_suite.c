@@ -24,6 +24,7 @@
 #include <stdint.h>
 #include <libbladeRF.h>
 #include <stdlib.h>
+#include <getopt.h>
 //Utility files
 #include "thread.h"
 #include "utils.h"
@@ -620,32 +621,90 @@ int fsk_test1(void)
         return status;
 }
 
-/**
- * Run all tests
- */
+static const struct option long_options[] = {
+    { "tx-device",  required_argument,  NULL,   't' },
+    { "rx-device",  required_argument,  NULL,   'r' },
+    { "tx-gain",    required_argument,  NULL,   'g' },
+    { "rx-gain",    required_argument,  NULL,   'G' },
+    { "link-only",  no_argument,        NULL,   'l' },
+    { "help",       no_argument,        NULL,   'h' },
+    { NULL,         0,                  NULL,   0   },
+};
+
+static void print_usage(const char *argv0)
+{
+    printf("Usage: %s [options]\n", argv0);
+    printf("Required options:\n");
+    printf("  -t, --tx-device <str>  TX bladeRF device ID (e.g. *:serial=00)\n");
+    printf("  -r, --rx-device <str>  RX bladeRF device ID (e.g. *:serial=8a)\n");
+    printf("  -g, --tx-gain <n>      TX unified gain (0-60)\n");
+    printf("  -G, --rx-gain <n>      RX unified gain (0-60)\n");
+    printf("\nOptional options:\n");
+    printf("  -l, --link-only        Run only the link test\n");
+    printf("  -h, --help             Show this help text\n");
+    printf("\nExample:\n");
+    printf("  %s -t '*:serial=00' -r '*:serial=8a' -g 45 -G 20\n", argv0);
+}
+
 int main(int argc, char *argv[])
 {
-    char        *dev_id1;
-    char        *dev_id2;
-    bladerf_gain tx_gain;
-    bladerf_gain rx_gain;
-    bool         link_test_only;
+    char        *dev_id1 = NULL;
+    char        *dev_id2 = NULL;
+    bladerf_gain tx_gain = 0;
+    bladerf_gain rx_gain = 0;
+    bool         link_test_only = false;
     int          status;
     bool         passed = 1;
+    int          opt;
+    int          opt_ind = 0;
+    bool         ok;
 
-    //Parse arguments
-    if (argc < 6){
-        fprintf(stderr, "Usage: %s [bladeRF device ID 1] [bladeRF device ID 2] [TX unified gain] [RX unified gain] [link test only (0/1)]\n"
-                        "   Ex: %s *:serial=00 *:serial=8a 45 20 0\n",
-                argv[0], argv[0]);
-        return 0;
+    while ((opt = getopt_long(argc, argv, "t:r:g:G:lh", long_options, &opt_ind)) != -1){
+        switch (opt){
+            case 't':
+                dev_id1 = optarg;
+                break;
+
+            case 'r':
+                dev_id2 = optarg;
+                break;
+
+            case 'g':
+                tx_gain = (bladerf_gain)str2uint(optarg, 0, 60, &ok);
+                if (!ok){
+                    fprintf(stderr, "Invalid TX gain: %s\n", optarg);
+                    return -1;
+                }
+                break;
+
+            case 'G':
+                rx_gain = (bladerf_gain)str2uint(optarg, 0, 60, &ok);
+                if (!ok){
+                    fprintf(stderr, "Invalid RX gain: %s\n", optarg);
+                    return -1;
+                }
+                break;
+
+            case 'l':
+                link_test_only = true;
+                break;
+
+            case 'h':
+                print_usage(argv[0]);
+                return 0;
+
+            default:
+                print_usage(argv[0]);
+                return -1;
+        }
     }
 
-    dev_id1        = argv[1];
-    dev_id2        = argv[2];
-    tx_gain        = (bladerf_gain)atoi(argv[3]);
-    rx_gain        = (bladerf_gain)atoi(argv[4]);
-    link_test_only = (bool) atoi(argv[5]);
+    // Check required arguments
+    if (!dev_id1 || !dev_id2 || tx_gain == 0 || rx_gain == 0){
+        fprintf(stderr, "Error: Missing required arguments\n\n");
+        print_usage(argv[0]);
+        return -1;
+    }
 
     if (!link_test_only){
         //FSK mod/demod
