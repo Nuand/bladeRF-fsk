@@ -996,11 +996,12 @@ void *phy_receive_frames(void *arg)
                             }
 
                             num_samples_rx_act = metadata.actual_count;
-                            if (timestamp != UINT64_MAX && metadata.timestamp != timestamp+NUM_SAMPLES_RX){
-                                NOTE("RX: %s: Unexpected timestamp on sync_rx call %u. "
-                                     "Expected %lu, got %lu.\n",
-                                     __FUNCTION__, rx_call_cnt, timestamp+NUM_SAMPLES_RX,
-                                     metadata.timestamp);
+                            if (timestamp != UINT64_MAX &&
+                                metadata.timestamp != timestamp+NUM_SAMPLES_RX){
+                                DEBUG_MSG("RX: %s: Unexpected timestamp on sync_rx call "
+                                          "%u. Expected %lu, got %lu.\n",
+                                          __FUNCTION__, rx_call_cnt,
+                                          timestamp+NUM_SAMPLES_RX, metadata.timestamp);
                             }
                             timestamp = metadata.timestamp;
                         #endif

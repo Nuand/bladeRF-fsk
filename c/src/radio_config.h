@@ -30,10 +30,6 @@
 #include "common.h"
 
 #define SYNC_BUFFER_SIZE 16384
-//1.5MHz
-#define BLADERF_BANDWIDTH 1500000
-//2Msps
-#define BLADERF_SAMPLE_RATE 2000000
 //DEBUG: Define this to disable metadata in synchronous interface
 // #define SYNC_NO_METADATA
 

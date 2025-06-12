@@ -54,20 +54,25 @@ option(BLADERF-FSK_ENABLE_DEBUG_FIR
         ${BLADERF-FSK_ENABLE_DEBUG_ALL}
 )
 option(BLADERF-FSK_ENABLE_DEBUG_BLADERF
-        "Print libbladeRF debug messages"
+        "Print bladeRF debug messages"
         ${BLADERF-FSK_ENABLE_DEBUG_ALL}
 )
 option(BLADERF-FSK_ENABLE_VERBOSE_BLADERF
-        "Print libbladeRF verbose (and debug) messages"
+        "Print bladeRF verbose (and debug/note) messages"
         OFF
 )
+option(BLADERF-FSK_ENABLE_NOTES_ALL "Print noteworthy messages in all files" OFF)
 option(BLADERF-FSK_ENABLE_NOTES_PHY
-        "Print noteworthy messages (e.g. recoverable errors) in phy.c"
-        OFF
+        "Print noteworthy messages in phy.c"
+        ${BLADERF-FSK_ENABLE_NOTES_ALL}
 )
 option(BLADERF-FSK_ENABLE_NOTES_LINK
-        "Print noteworthy messages (e.g. recoverable errors) in link.c"
-        OFF
+        "Print noteworthy messages in link.c"
+        ${BLADERF-FSK_ENABLE_NOTES_ALL}
+)
+option(BLADERF-FSK_ENABLE_NOTES_BLADERF
+        "Print bladeRF noteworthy messages"
+        ${BLADERF-FSK_ENABLE_NOTES_ALL}
 )
 option(BLADERF-FSK_BYPASS_RX_CHANNEL_FILTER "Bypass the PHY's RX channel filter." OFF)
 option(BLADERF-FSK_BYPASS_PHY_SCRAMBLING "Bypass scrambling in the phy layer" OFF)
@@ -108,6 +113,9 @@ if(BLADERF-FSK_ENABLE_NOTES_PHY)
 endif()
 if(BLADERF-FSK_ENABLE_NOTES_LINK)
     set_property(SOURCE ${SRC_DIR}/link.c APPEND_STRING PROPERTY COMPILE_FLAGS "-DENABLE_NOTES ")
+endif()
+if(BLADERF-FSK_ENABLE_NOTES_BLADERF)
+    set_property(SOURCE ${SRC_DIR}/radio_config.c APPEND_STRING PROPERTY COMPILE_FLAGS "-DENABLE_NOTES ")
 endif()
 
 if(BLADERF-FSK_BYPASS_RX_CHANNEL_FILTER)

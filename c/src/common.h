@@ -52,6 +52,9 @@ struct radio_params {
     bladerf_gain        rx_unified_gain; //Range: device dependent
     bool                rx_biastee;      //Boolean
     bool                rx_agc;          //Boolean
+
+    //common
+    bladerf_sample_rate samplerate;      //Range: device dependent
 };
 
 #endif

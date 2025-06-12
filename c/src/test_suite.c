@@ -1,6 +1,6 @@
 /**
  * @file
- * @brief   Various modem tests for phy.c, link.c, and fsk.c
+ * @brief   Various modem tests for phy.c, link.c, and fsk.c for 2 bladeRFs
  *
  * This file is part of the bladeRF-fsk project
  *
@@ -71,7 +71,7 @@ void *rx_thread_func(void *arg) {
  *  2) 100 frames of 1000-byte pseudorandom data from dev2 -> dev1
  */
 int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_frequency tx_freq2,
-              bladerf_gain tx_gain, bladerf_gain rx_gain)
+              bladerf_gain tx_gain, bladerf_gain rx_gain, bladerf_sample_rate sample_rate)
 {
     struct link_handle *link1 = NULL;
     struct link_handle *link2 = NULL;
@@ -103,6 +103,7 @@ int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_
     //Initialize the links
     DEBUG_MSG("Initializing link1 and link2...\n");
     //Init link1
+    params.samplerate      = sample_rate;
     params.tx_freq         = tx_freq1;
     params.tx_chan         = 0;
     params.tx_vga1_gain    = -4;
@@ -240,7 +241,7 @@ int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_
  *  2) A pseudorandom data frame from dev1 -> dev2
  */
 int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_frequency tx_freq2,
-             bladerf_gain tx_gain, bladerf_gain rx_gain)
+             bladerf_gain tx_gain, bladerf_gain rx_gain, bladerf_sample_rate sample_rate)
 {
     struct phy_handle  *phy1 = NULL;
     struct phy_handle  *phy2 = NULL;
@@ -273,6 +274,7 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
     //Initialize the phys
     DEBUG_MSG("Initializing phy1 and phy2..\n");
     //Init phy1
+    params.samplerate      = sample_rate;
     params.tx_freq         = tx_freq1;
     params.tx_chan         = 0;
     params.tx_vga1_gain    = -4;
@@ -431,7 +433,7 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
  * Test phy receiver thread to see if it's using too much CPU. If ENABLE_NOTES is
  * defined, overrun messages will be seen if the PHY receiver is at ~100% CPU.
  */
-int phy_receive_test(char *dev_id)
+int phy_receive_test(char *dev_id, bladerf_sample_rate sample_rate)
 {
     struct phy_handle  *phy = NULL;
     uint8_t            *rx_data;
@@ -458,6 +460,7 @@ int phy_receive_test(char *dev_id)
         DEBUG_MSG("bladeRF serial#: %s\n", sn.serial);
     #endif
 
+    params.samplerate      = sample_rate;
     params.tx_freq         = 904000000;
     params.tx_chan         = 0;
     params.tx_vga1_gain    = -4;
@@ -622,55 +625,61 @@ int fsk_test1(void)
 }
 
 static const struct option long_options[] = {
-    { "tx-device",  required_argument,  NULL,   't' },
-    { "rx-device",  required_argument,  NULL,   'r' },
-    { "tx-gain",    required_argument,  NULL,   'g' },
-    { "rx-gain",    required_argument,  NULL,   'G' },
-    { "link-only",  no_argument,        NULL,   'l' },
-    { "help",       no_argument,        NULL,   'h' },
-    { NULL,         0,                  NULL,   0   },
+    { "device1",     required_argument,  NULL,   'd' },
+    { "device2",     required_argument,  NULL,   'D' },
+    { "tx-gain",     required_argument,  NULL,   'g' },
+    { "rx-gain",     required_argument,  NULL,   'G' },
+    { "link-only",   no_argument,        NULL,   'l' },
+    { "sample-rate", required_argument,  NULL,   's' },
+    { "help",        no_argument,        NULL,   'h' },
+    { NULL,          0,                  NULL,   0   },
 };
 
 static void print_usage(const char *argv0)
 {
+    printf("Automated bladeRF-fsk modem tests between 2 bladeRFs\n");
     printf("Usage: %s [options]\n", argv0);
     printf("Required options:\n");
-    printf("  -t, --tx-device <str>  TX bladeRF device ID (e.g. *:serial=00)\n");
-    printf("  -r, --rx-device <str>  RX bladeRF device ID (e.g. *:serial=8a)\n");
-    printf("  -g, --tx-gain <n>      TX unified gain (0-60)\n");
-    printf("  -G, --rx-gain <n>      RX unified gain (0-60)\n");
+    printf("  -d, --device1 <str>    bladeRF 1st device ID (e.g. *:serial=00)\n");
+    printf("  -D, --device2 <str>    bladeRF 2nd device ID (e.g. *:serial=8a)\n");
     printf("\nOptional options:\n");
+    printf("  -g, --tx-gain <n>      TX unified gain (default: 45)\n");
+    printf("  -G, --rx-gain <n>      RX unified gain (default: 20)\n");
     printf("  -l, --link-only        Run only the link test\n");
+    printf("  -s, --sample-rate <n>  Sample rate in Hz (default: 2000000)\n");
     printf("  -h, --help             Show this help text\n");
     printf("\nExample:\n");
-    printf("  %s -t '*:serial=00' -r '*:serial=8a' -g 45 -G 20\n", argv0);
+    printf("  %s -d *:serial=00 -D *:serial=8a -g 45 -G 20 -s 3000000\n", argv0);
 }
 
 int main(int argc, char *argv[])
 {
-    char        *dev_id1 = NULL;
-    char        *dev_id2 = NULL;
-    bladerf_gain tx_gain = 0;
-    bladerf_gain rx_gain = 0;
-    bool         link_test_only = false;
-    int          status;
-    bool         passed = 1;
-    int          opt;
-    int          opt_ind = 0;
-    bool         ok;
+    char               *dev_id1 = NULL;
+    char               *dev_id2 = NULL;
+    bladerf_gain        tx_gain = 45;   //default
+    bladerf_gain        rx_gain = 20;   //default
+    bool                link_test_only = false;
+    int                 status;
+    bool                passed = 1;
+    int                 opt;
+    int                 opt_ind = 0;
+    bool                ok;
+    bladerf_sample_rate sample_rate = 2000000;  //Default sample rate
 
-    while ((opt = getopt_long(argc, argv, "t:r:g:G:lh", long_options, &opt_ind)) != -1){
+    //Note: not doing exact checks on gain/rate limits because that's already done in
+    //radio_config.c
+    while ((opt = getopt_long(argc, argv, "d:D:g:G:ls:h", long_options, &opt_ind)) != -1){
         switch (opt){
-            case 't':
+            case 'd':
                 dev_id1 = optarg;
                 break;
 
-            case 'r':
+            case 'D':
                 dev_id2 = optarg;
                 break;
 
             case 'g':
-                tx_gain = (bladerf_gain)str2uint(optarg, 0, 60, &ok);
+                tx_gain = (bladerf_gain)str2int(optarg, -30, 80, &ok);
                 if (!ok){
                     fprintf(stderr, "Invalid TX gain: %s\n", optarg);
                     return -1;
@@ -678,7 +687,7 @@ int main(int argc, char *argv[])
                 break;
 
             case 'G':
-                rx_gain = (bladerf_gain)str2uint(optarg, 0, 60, &ok);
+                rx_gain = (bladerf_gain)str2int(optarg, -30, 80, &ok);
                 if (!ok){
                     fprintf(stderr, "Invalid RX gain: %s\n", optarg);
                     return -1;
@@ -687,6 +696,14 @@ int main(int argc, char *argv[])
 
             case 'l':
                 link_test_only = true;
+                break;
+
+            case 's':
+                sample_rate = (bladerf_sample_rate)str2uint(optarg, 0, 70000000, &ok);
+                if (!ok){
+                    fprintf(stderr, "Invalid sample rate: %s\n", optarg);
+                    return -1;
+                }
                 break;
 
             case 'h':
@@ -700,7 +717,7 @@ int main(int argc, char *argv[])
     }
 
     // Check required arguments
-    if (!dev_id1 || !dev_id2 || tx_gain == 0 || rx_gain == 0){
+    if (!dev_id1 || !dev_id2){
         fprintf(stderr, "Error: Missing required arguments\n\n");
         print_usage(argv[0]);
         return -1;
@@ -714,30 +731,30 @@ int main(int argc, char *argv[])
         }
 
         //PHY receive with device 1
-        status = phy_receive_test(dev_id1);
+        status = phy_receive_test(dev_id1, sample_rate);
         if (status != 0){
             passed = 0;
         }
         //PHY receive with device 2
-        status = phy_receive_test(dev_id2);
+        status = phy_receive_test(dev_id2, sample_rate);
         if (status != 0){
             passed = 0;
         }
 
         //PHY transmission from device 1 -> device 2
-        status = phy_test(dev_id1, dev_id2, 904000000, 924000000, tx_gain, rx_gain);
+        status = phy_test(dev_id1, dev_id2, 904000000, 924000000, tx_gain, rx_gain, sample_rate);
         if (status != 0){
             passed = 0;
         }
         //PHY transmission from device 2 -> device 1
-        status = phy_test(dev_id2, dev_id1, 904000000, 924000000, tx_gain, rx_gain);
+        status = phy_test(dev_id2, dev_id1, 904000000, 924000000, tx_gain, rx_gain, sample_rate);
         if (status != 0){
             passed = 0;
         }
     }
 
     //LINK transmission w/ ACKs from device 1 -> device 2
-    status = link_test(dev_id1, dev_id2, 904000000, 924000000, tx_gain, rx_gain);
+    status = link_test(dev_id1, dev_id2, 904000000, 924000000, tx_gain, rx_gain, sample_rate);
     if (status != 0){
         passed = 0;
     }

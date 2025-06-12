@@ -37,13 +37,13 @@
 #   define DEBUG_MSG(...)
 #endif
 
-#define OPTIONS "hd:p:r:o:t:i:q"
+#define OPTIONS "hd:p:r:o:t:i:s:q"
 
 #define OPTION_HELP        'h'
 #define OPTION_DEVICE      'd'
 #define OPTION_PAYLOAD_LEN 'p'
 #define OPTION_QUIET       'q'
-
+#define OPTION_SAMPLERATE  's'
 
 #define OPTION_RXFREQ   'r'
 #define OPTION_INPUT    'i'
@@ -92,6 +92,11 @@
 #define BLADERF2_RX_GAIN_MAX 60
 #define BLADERF2_RX_GAIN_MIN BLADERF2_RX_GAIN_MAX - 76  //sometimes higher than this depending on freq
 
+#define BLADERF1_SAMPLERATE_MIN  1500000 //can go lower but need to stay <= bandwidth
+#define BLADERF1_SAMPLERATE_MAX 40000000
+#define BLADERF2_SAMPLERATE_MIN   520834
+#define BLADERF2_SAMPLERATE_MAX 61440000
+
 //Worst case max and min between both devices, based on the above numbers
 #define TX_GAIN_MIN ((BLADERF1_TX_GAIN_MIN < BLADERF2_TX_GAIN_MIN) ? BLADERF1_TX_GAIN_MIN \
                                                                    : BLADERF2_TX_GAIN_MIN)
@@ -101,6 +106,10 @@
                                                                    : BLADERF2_RX_GAIN_MIN)
 #define RX_GAIN_MAX ((BLADERF1_RX_GAIN_MAX > BLADERF2_RX_GAIN_MAX) ? BLADERF1_RX_GAIN_MAX \
                                                                    : BLADERF2_RX_GAIN_MAX)
+#define SAMPLERATE_MIN ((BLADERF1_SAMPLERATE_MIN < BLADERF2_SAMPLERATE_MIN) ? \
+                        BLADERF1_SAMPLERATE_MIN : BLADERF2_SAMPLERATE_MIN)
+#define SAMPLERATE_MAX ((BLADERF1_SAMPLERATE_MAX < BLADERF2_SAMPLERATE_MAX) ? \
+                        BLADERF1_SAMPLERATE_MAX : BLADERF2_SAMPLERATE_MAX)
 
 #define CHAN_MIN 0
 #define CHAN_MAX 1
@@ -119,6 +128,8 @@
 #define TX_GAIN_DEFAULT 50
 #define RX_GAIN_DEFAULT 30
 
+#define SAMPLERATE_DEFAULT 2000000
+
 #define PAYLOAD_LEN_MIN     1
 #define PAYLOAD_LEN_MAX     1000000
 #define PAYLOAD_LEN_DEFAULT 1000
@@ -128,6 +139,7 @@ static struct option long_options[] = {
     { "device",      required_argument,  NULL,   OPTION_DEVICE      },
     { "quiet",       no_argument,        NULL,   OPTION_QUIET       },
     { "packet-size", required_argument,  NULL,   OPTION_PAYLOAD_LEN },
+    { "sample-rate", required_argument,  NULL,   OPTION_SAMPLERATE  },
 
     { "output",      required_argument,  NULL,   OPTION_OUTPUT      },
     { "rx-lna",      required_argument,  NULL,   OPTION_RXLNA       },
@@ -169,6 +181,7 @@ static const size_t num_freq_suffixes =
     {
         printf("  bladeRF handle:     %p\n",  config->bladerf_dev);
         printf("  payload length:     %u\n",  config->payload_length);
+        printf("  sample rate:        %u\n",  config->params.samplerate);
         printf("  quiet:              %d\n",  config->quiet);
         printf("\n");
         printf("  RX Parameters:\n");
@@ -230,7 +243,9 @@ static struct config *alloc_config_with_defaults()
     config->params.tx_unified_gain = TX_GAIN_DEFAULT;
     config->params.tx_biastee      = false;
 
+    /* Common defaults */
     config->payload_length         = PAYLOAD_LEN_DEFAULT;
+    config->params.samplerate      = SAMPLERATE_DEFAULT;
 
     return config;
 }
@@ -494,8 +509,22 @@ int config_init_from_cmdline(int argc, char * const argv[], struct config **conf
                                                   &valid);
                 if (!valid) {
                     status = -1;
-                    fprintf(stderr, "Invalid payload length: %s. Range: %u to %u\n",
+                    fprintf(stderr, "Invalid payload length: %s. Range: [%u, %u]\n",
                             optarg, PAYLOAD_LEN_MIN, PAYLOAD_LEN_MAX);
+                    goto out;
+                }
+                break;
+
+            case OPTION_SAMPLERATE:
+                config->params.samplerate = (bladerf_sample_rate)
+                    str2uint64_suffix(optarg,
+                                      SAMPLERATE_MIN, SAMPLERATE_MAX,
+                                      freq_suffixes, num_freq_suffixes,
+                                      &valid);
+                if (!valid) {
+                    status = -1;
+                    fprintf(stderr, "Invalid sample rate: %s. Range: [%u, %u]\n",
+                            optarg, SAMPLERATE_MIN, SAMPLERATE_MAX);
                     goto out;
                 }
                 break;
@@ -556,6 +585,13 @@ void config_print_options()
 "   -p, --packet-size <val> Payload data length per link layer frame [bytes]. Default: %u\n"
 "                             Both ends of the link must use the same size.\n"
 "   -q, --quiet             Suppress printing of banner/exit messages.\n"
+"   -s, --sample-rate <val> bladeRF sample rate [sps]. May use shorthand (ex: 2M).\n"
+"                             Link rate is equal to 1/8 the sample rate.\n"
+"                             Bandwidth is set automatically to be less than sample rate.\n"
+"                             Warning: high sample rates can cause overruns/modem failure.\n"
+"                             Range: [%u, %u] (bladeRF 1),\n"
+"                                    [ %u, %u] (bladeRF 2)\n"
+"                             Default: %u\n"
 "\n"
 "   -r, --rx-freq <freq>    RX frequency [Hz]. May use shorthand (ex: 904M). Default: %d\n"
 "   -o, --output  <file>    RX data output. Default: stdout.\n"
@@ -563,10 +599,10 @@ void config_print_options()
 "   -t, --tx-freq <freq>    TX frequency [Hz]. May use shorthand (ex: 924M). Default: %d\n"
 "   -i, --input   <file>    TX data input. Default: stdin.\n"
 "\n\n"
-"   --rx-chan <value>       RX channel. Range: %d to %d. Default: %d.            [bladeRF 2 only]\n"
+"   --rx-chan <value>       RX channel. Range: [%d, %d]. Default: %d.            [bladeRF 2 only]\n"
 "   --rx-biast              Enable bias-tee amplifier accessory on RX channel [bladeRF 2 only]\n"
 "\n"
-"   --tx-chan <value>       TX channel. Range: %d to %d. Default: %d.            [bladeRF 2 only]\n"
+"   --tx-chan <value>       TX channel. Range: [%d, %d]. Default: %d.            [bladeRF 2 only]\n"
 "   --tx-biast              Enable bias-tee amplifier accessory on TX channel [bladeRF 2 only]\n"
 "\n"
 "   RX gains:\n"
@@ -575,22 +611,26 @@ void config_print_options()
 "\n"
 "   --rx-agc                Enables RX AGC (enabled by default). Uses fastattack mode on bladeRF 2.\n"
 "   --rx-gain <value>       RX unified gain [dB]\n"
-"                             Range: %d to %d (bladeRF 1), %d to %d (bladeRF 2). Default: %d.\n"
+"                             Range: [%d, %d] (bladeRF 1), [%d, %d] (bladeRF 2). Default: %d.\n"
 "   --rx-lna  <value>       RX LNA gain. Values: bypass, mid, max;          [bladeRF 1 only]\n"
-"                             representing %d to %d dB. Default: max\n"
-"   --rx-vga1 <value>       RX VGA1 gain [dB]. Range: %d to %d. Default: %d. [bladeRF 1 only]\n"
-"   --rx-vga2 <value>       RX VGA2 gain [dB]. Range: %d to %d. Default: %d.  [bladeRF 1 only]\n"
+"                             representing [%d, %d, %d] dB. Default: max\n"
+"   --rx-vga1 <value>       RX VGA1 gain [dB]. Range: [%d, %d]. Default: %d. [bladeRF 1 only]\n"
+"   --rx-vga2 <value>       RX VGA2 gain [dB]. Range: [%d, %d]. Default: %d.  [bladeRF 1 only]\n"
 "\n"
 "   TX gains:\n"
 "   The default TX gain mode is to use unified gains, which can be set with --tx-gain.\n"
 "     Alternatively, to set specific gain stages on the bladeRF 1 use --tx-vga1, --tx-vga2\n"
 "\n"
 "   --tx-gain <value>       TX unified gain [dB]\n"
-"                             Range: %d to %d (bladeRF 1), %d to %d (bladeRF 2). Default: %d.\n"
-"   --tx-vga1 <value>       TX VGA1 gain [dB]. Range: %d to %d. Default: %d. [bladeRF 1 only]\n"
-"   --tx-vga2 <value>       TX VGA2 gain [dB]. Range: %d to %d. Default: %d.    [bladeRF 1 only]\n",
+"                             Range: [%d, %d] (bladeRF 1), [%d, %d] (bladeRF 2). Default: %d.\n"
+"   --tx-vga1 <value>       TX VGA1 gain [dB]. Range: [%d, %d]. Default: %d. [bladeRF 1 only]\n"
+"   --tx-vga2 <value>       TX VGA2 gain [dB]. Range: [%d, %d]. Default: %d.    [bladeRF 1 only]\n",
 
     PAYLOAD_LEN_DEFAULT,
+
+    BLADERF1_SAMPLERATE_MIN, BLADERF1_SAMPLERATE_MAX,
+    BLADERF2_SAMPLERATE_MIN, BLADERF2_SAMPLERATE_MAX,
+    SAMPLERATE_DEFAULT,
 
     RX_FREQ_DEFAULT, TX_FREQ_DEFAULT,
 
@@ -598,7 +638,7 @@ void config_print_options()
     CHAN_MIN, CHAN_MAX, CHAN_DEFAULT,
 
     BLADERF1_RX_GAIN_MIN, BLADERF1_RX_GAIN_MAX, BLADERF2_RX_GAIN_MIN, BLADERF2_RX_GAIN_MAX, RX_GAIN_DEFAULT,
-    0, BLADERF_LNA_GAIN_MAX_DB,
+    0, BLADERF_LNA_GAIN_MID_DB, BLADERF_LNA_GAIN_MAX_DB,
     BLADERF_RXVGA1_GAIN_MIN, BLADERF_RXVGA1_GAIN_MAX, RX_VGA1_DEFAULT,
     BLADERF_RXVGA2_GAIN_MIN, BLADERF_RXVGA2_GAIN_MAX, RX_VGA2_DEFAULT,
 

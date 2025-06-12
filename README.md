@@ -71,8 +71,10 @@ Below is a list of project-specific CMake options.
 | -DBLADERF-FSK_BYPASS_RX_CHANNEL_FILTER=<ON/OFF> | Bypass the RX low-pass channel filter. Default: OFF                       |
 | -DBLADERF-FSK_BYPASS_RX_PNORM=<ON/OFF>          | Bypass RX power normalization. Default: OFF                               |
 | -DBLADERF-FSK_BYPASS_PHY_SCRAMBLING=<ON/OFF>    | Bypass scrambling in the PHY layer. Default: OFF                          |
+| -DBLADERF-FSK_ENABLE_NOTES_ALL=<ON/OFF>         | Print noteworthy messages from all files. Default: OFF                    |
 | -DBLADERF-FSK_ENABLE_NOTES_LINK=<ON/OFF>        | Print noteworthy messages from link.c, including CRC errors. Default: OFF |
 | -DBLADERF-FSK_ENABLE_NOTES_PHY=<ON/OFF>         | Print noteworthy messages from phy.c, including RX overruns. Default: OFF |
+| -DBLADERF-FSK_ENABLE_NOTES_BLADERF=<ON/OFF>     | Print bladeRF noteworthy messages. Default: OFF                           |
 | -DBLADERF-FSK_ENABLE_DEBUG_ALL=<ON/OFF>         | Print debug messages from all files & bladeRF. Default: OFF               |
 | -DBLADERF-FSK_ENABLE_DEBUG_TEST_SUITE=<ON/OFF>  | Print debug messages from test_suite.c. Default: OFF                      |
 | -DBLADERF-FSK_ENABLE_DEBUG_CONFIG=<ON/OFF>      | Print debug messages from config.c. Default: OFF                          |
@@ -217,24 +219,27 @@ Is the FSK modem not working for you? Here are some troubleshooting steps:
 ## Modem Details ##
 ### Waveform Specifications ###
 
-| Field                               | Value                            |
-| ----------------------------------- |:---------------------------------|
-| BladeRF Sample rate                 | 2 Msps                           |
-| BladeRF Bandwidth                   | 1.5 MHz                          |
-| Raw link rate                       | 250 kbps                         |
-| Symbol rate                         | 250 ksym/s                       |
-| Bits per symbol                     | 1                                |
-| Symbol mapping                      | Positive frequency deviation = 1<br>Negative frequency deviation = 0 |
-| Samples per symbol                  | 8                                |
+The listed specifications are based off the default sample rate of 2 Msps and the default
+packet payload size of 1000 bytes.
+
+| Field                            | Value                                  |
+| -------------------------------- |:---------------------------------------|
+| BladeRF Sample rate              | 2 Msps                                 |
+| BladeRF Bandwidth                | 1 MHz (bladeRF 2), 1.5 MHz (bladeRF 1) |
+| Raw link rate                    | 250 kbps                               |
+| Symbol rate                      | 250 ksym/s                             |
+| Bits per symbol                  | 1                                      |
+| Symbol mapping                   | Positive frequency deviation = 1<br>Negative frequency deviation = 0 |
+| Samples per symbol               | 8                                      |
 | Phase modulation index<br>(phase deviation per symbol) | π/2 radians  (1/4 revolution)  |
-| Frequency deviation                 | +/- 62.5 kHz                     |
-| Main lobe bandwidth                 | 375 kHz                          |
-| RX FIR filter passband bandwidth    | 250 kHz                          |
-| RX FIR filter stopband bandwidth    | 666 kHz                          |
-| Data frame length (default)         | 8138 symbols (32.55 ms)          |
-| Data frame payload length (default) | 1000 bytes                       |
-| Byte ordering                       | Little endian (LSB first)        |
-| Bit ordering                        | LSb first                        |
+| Frequency deviation              | +/- 62.5 kHz                           |
+| Main lobe bandwidth              | 375 kHz                                |
+| RX FIR filter passband bandwidth | 250 kHz                                |
+| RX FIR filter stopband bandwidth | 666 kHz                                |
+| Data frame length                | 8138 symbols (32.55 ms)                |
+| Data frame payload length        | 1000 bytes                             |
+| Byte ordering                    | Little endian (LSB first)              |
+| Bit ordering                     | LSb first                              |
 
 ### Framing Details ###
 Link layer frame is embedded within the physical layer frame.
@@ -244,24 +249,24 @@ Note: Link layer data frame payload length is adjustable on the command line via
 1000 bytes.
 
 PHY frame contents:
-| Field             | Length                    |
-| ----------------- |:--------------------------|
-| Ramp up           | 8 samples                 |
-| Training sequence | 4 bytes                   |
-| Preamble          | 4 bytes                   |
-| Link layer frame  | 7 or 1009 bytes (default) |
-| Ramp down         | 8 samples                 |
-| Total             | 15 or 1017 bytes          |
+| Field             | Length           |
+| ----------------- |:-----------------|
+| Ramp up           | 8 samples        |
+| Training sequence | 4 bytes          |
+| Preamble          | 4 bytes          |
+| Link layer frame  | 7 or 1009 bytes  |
+| Ramp down         | 8 samples        |
+| Total             | 15 or 1017 bytes |
 
 Link layer data frame contents:
-| Field                    | Length               |
-| ------------------------ |:---------------------|
-| Frame type (data or ACK) | 1 byte               |
-| Sequence number          | 2 bytes              |
-| Used payload length      | 2 bytes              |
-| Payload                  | 1000 bytes (default) |
-| CRC32 checksum           | 4 bytes              |
-| Total                    | 1009 bytes           |
+| Field                    | Length     |
+| ------------------------ |:-----------|
+| Frame type (data or ACK) | 1 byte     |
+| Sequence number          | 2 bytes    |
+| Used payload length      | 2 bytes    |
+| Payload                  | 1000 bytes |
+| CRC32 checksum           | 4 bytes    |
+| Total                    | 1009 bytes |
 
 Link layer acknowledgement (ACK) frame contents:
 | Field                    | Length     |
