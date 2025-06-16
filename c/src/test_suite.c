@@ -71,7 +71,8 @@ void *rx_thread_func(void *arg) {
  *  2) 100 frames of 1000-byte pseudorandom data from dev2 -> dev1
  */
 int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_frequency tx_freq2,
-              bladerf_gain tx_gain, bladerf_gain rx_gain, bladerf_sample_rate sample_rate)
+              bladerf_gain tx_gain, bladerf_gain rx_gain, bladerf_sample_rate sample_rate,
+              FILE *log_file)
 {
     struct link_handle *link1 = NULL;
     struct link_handle *link2 = NULL;
@@ -84,6 +85,7 @@ int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_
     uint64_t            prng_seed = 0xA30904F7A7C8DCFE;
     struct radio_params params;
     struct bladerf     *dev1 = NULL, *dev2 = NULL;
+    float               avg_snr_db;
     bool                passed = 1;
 
     printf("------------BEGINNING LINK TEST-----------\n");
@@ -216,9 +218,15 @@ int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_
 
     out:
         DEBUG_MSG("Closing link 1\n");
-        link_close(link1);
+        link_close(link1, &avg_snr_db);
+        if (log_file != NULL){
+            fprintf(log_file, "      {\"avg_snr\":%.1f},\n", avg_snr_db);
+        }
         DEBUG_MSG("Closing link 2\n");
-        link_close(link2);
+        link_close(link2, &avg_snr_db);
+        if (log_file != NULL){
+            fprintf(log_file, "      {\"avg_snr\":%.1f}\n", avg_snr_db);
+        }
         DEBUG_MSG("Closing bladeRFs\n");
         bladerf_close(dev1);
         bladerf_close(dev2);
@@ -241,7 +249,8 @@ int link_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_
  *  2) A pseudorandom data frame from dev1 -> dev2
  */
 int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_frequency tx_freq2,
-             bladerf_gain tx_gain, bladerf_gain rx_gain, bladerf_sample_rate sample_rate)
+             bladerf_gain tx_gain, bladerf_gain rx_gain, bladerf_sample_rate sample_rate,
+             FILE *log_file)
 {
     struct phy_handle  *phy1 = NULL;
     struct phy_handle  *phy2 = NULL;
@@ -255,6 +264,7 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
     bool                rx_on = false, tx_on = false;
     struct radio_params params;
     struct bladerf     *dev1 = NULL, *dev2 = NULL;
+    float               avg_snr_db;
     bool                passed = 1;
 
     printf("------------BEGINNING PHY TEST------------\n");
@@ -402,13 +412,16 @@ int phy_test(char *dev_id1, char *dev_id2, bladerf_frequency tx_freq1, bladerf_f
             }
         }
         if (rx_on){
-            status = phy_stop_receiver(phy2);
+            status = phy_stop_receiver(phy2, &avg_snr_db);
             if (status != 0){
                 if (status == 1){
                     fprintf(stderr, "WARNING: RX overruns were detected on PHY receiver\n");
                 }else{
                     fprintf(stderr, "Couldn't stop phy2 receiver\n");
                 }
+            }
+            if (log_file != NULL){
+                fprintf(log_file, "      {\"avg_snr\":%.1f},\n", avg_snr_db);
             }
         }
         free(tx_data2);
@@ -508,7 +521,7 @@ int phy_receive_test(char *dev_id, bladerf_sample_rate sample_rate)
         ret = status;
         //Stop transmitters/receivers
         if (rx_on){
-            status = phy_stop_receiver(phy);
+            status = phy_stop_receiver(phy, NULL);
             if (status != 0){
                 if (status == 1){
                     fprintf(stderr, "ERROR: RX overruns were detected on PHY receiver\n");
@@ -631,6 +644,7 @@ static const struct option long_options[] = {
     { "rx-gain",     required_argument,  NULL,   'G' },
     { "link-only",   no_argument,        NULL,   'l' },
     { "sample-rate", required_argument,  NULL,   's' },
+    { "log-json",    required_argument,  NULL,   'j' },
     { "help",        no_argument,        NULL,   'h' },
     { NULL,          0,                  NULL,   0   },
 };
@@ -647,6 +661,7 @@ static void print_usage(const char *argv0)
     printf("  -G, --rx-gain <n>      RX unified gain (default: 20)\n");
     printf("  -l, --link-only        Run only the link test\n");
     printf("  -s, --sample-rate <n>  Sample rate in Hz (default: 2000000)\n");
+    printf("  -j, --log-json <file>  Log run info to specified JSON file\n");
     printf("  -h, --help             Show this help text\n");
     printf("\nExample:\n");
     printf("  %s -d *:serial=00 -D *:serial=8a -g 45 -G 20 -s 3000000\n", argv0);
@@ -659,16 +674,19 @@ int main(int argc, char *argv[])
     bladerf_gain        tx_gain = 45;   //default
     bladerf_gain        rx_gain = 20;   //default
     bool                link_test_only = false;
+    bool                log_json = false;
     int                 status;
     bool                passed = 1;
     int                 opt;
     int                 opt_ind = 0;
     bool                ok;
     bladerf_sample_rate sample_rate = 2000000;  //Default sample rate
+    FILE               *log_file = NULL;
+    char                log_filename[256] = {0};  // Initialize to empty string
 
     //Note: not doing exact checks on gain/rate limits because that's already done in
     //radio_config.c
-    while ((opt = getopt_long(argc, argv, "d:D:g:G:ls:h", long_options, &opt_ind)) != -1){
+    while ((opt = getopt_long(argc, argv, "d:D:g:G:ls:j:h", long_options, &opt_ind)) != -1){
         switch (opt){
             case 'd':
                 dev_id1 = optarg;
@@ -706,6 +724,11 @@ int main(int argc, char *argv[])
                 }
                 break;
 
+            case 'j':
+                log_json = true;
+                strncpy(log_filename, optarg, sizeof(log_filename) - 1);
+                break;
+
             case 'h':
                 print_usage(argv[0]);
                 return 0;
@@ -721,6 +744,26 @@ int main(int argc, char *argv[])
         fprintf(stderr, "Error: Missing required arguments\n\n");
         print_usage(argv[0]);
         return -1;
+    }
+
+    if (log_json){
+        if (strlen(log_filename) == 0) {
+            fprintf(stderr, "Error: Log filename must be specified with -j option\n");
+            return -1;
+        }
+        log_file = fopen(log_filename, "w");
+        if (log_file == NULL){
+            fprintf(stderr, "Failed to open json log file for writing: %s\n", strerror(errno));
+            return -1;
+        }
+
+        fprintf(log_file, "{\n");
+        fprintf(log_file, "   \"cmd\": \"");
+        for (int i = 0; i < argc; i++) {
+            fprintf(log_file, "%s%s", argv[i], (i < argc-1) ? " " : "");
+        }
+        fprintf(log_file, "\",\n");
+        fprintf(log_file, "   \"rx_runs\": [\n");
     }
 
     if (!link_test_only){
@@ -742,21 +785,30 @@ int main(int argc, char *argv[])
         }
 
         //PHY transmission from device 1 -> device 2
-        status = phy_test(dev_id1, dev_id2, 904000000, 924000000, tx_gain, rx_gain, sample_rate);
+        status = phy_test(dev_id1, dev_id2, 904000000, 924000000, tx_gain, rx_gain,
+                          sample_rate, log_file);
         if (status != 0){
             passed = 0;
         }
         //PHY transmission from device 2 -> device 1
-        status = phy_test(dev_id2, dev_id1, 904000000, 924000000, tx_gain, rx_gain, sample_rate);
+        status = phy_test(dev_id2, dev_id1, 904000000, 924000000, tx_gain, rx_gain,
+                          sample_rate, log_file);
         if (status != 0){
             passed = 0;
         }
     }
 
     //LINK transmission w/ ACKs from device 1 -> device 2
-    status = link_test(dev_id1, dev_id2, 904000000, 924000000, tx_gain, rx_gain, sample_rate);
+    status = link_test(dev_id1, dev_id2, 904000000, 924000000, tx_gain, rx_gain,
+                       sample_rate, log_file);
     if (status != 0){
         passed = 0;
+    }
+
+    if (log_file != NULL){
+        fprintf(log_file, "   ]\n");
+        fprintf(log_file, "}\n");
+        fclose(log_file);
     }
 
     if (!passed){

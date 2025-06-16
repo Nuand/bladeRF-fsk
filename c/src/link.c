@@ -275,11 +275,11 @@ struct link_handle *link_init(struct bladerf *dev, struct radio_params *params, 
     return link;
 
     error:
-        link_close(link);
+        link_close(link, NULL);
         return NULL;
 }
 
-void link_close(struct link_handle *link)
+void link_close(struct link_handle *link, float *avg_snr_db)
 {
     int status;
 
@@ -355,7 +355,7 @@ void link_close(struct link_handle *link)
                 }
             }
             if (link->phy_rx_on){
-                status = phy_stop_receiver(link->phy);
+                status = phy_stop_receiver(link->phy, avg_snr_db);
                 if (status != 0){
                     if (status == 1){
                         ERROR("Warning: RX overruns were detected\n");

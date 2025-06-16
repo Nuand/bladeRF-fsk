@@ -144,12 +144,15 @@ int phy_start_receiver(struct phy_handle *phy, unsigned int warmup_cnt);
 /**
  * Stop the PHY receiver thread
  *
- * @param[in]   phy     pointer to phy_handle struct
+ * @param[in]   phy           pointer to phy_handle struct
+ * @param[out]  avg_snr_db    Averaged SNR estimate over all received frames [dB]
+ *                            NAN indicates no estimate because no RX frames were detected
+ *                            Set to NULL if not needed.
  *
  * @return      0 on success,-1 on failure,
  *              1 if RX overruns were experienced (but otherwise successful)
  */
-int phy_stop_receiver(struct phy_handle *phy);
+int phy_stop_receiver(struct phy_handle *phy, float *avg_snr_db);
 
 /**
  * Request a received frame from phy_receive_frames(). Caller should call

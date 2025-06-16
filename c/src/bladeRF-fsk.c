@@ -273,14 +273,14 @@ void stop(struct bladerf_fsk_handle *handle)
             //Close the link
             //This stops potential indefinite waiting inside link.c() receiver functions
             //so that calls to link_receive_data() will return
-            link_close(handle->link);
+            link_close(handle->link, NULL);
 
             status = THREAD_JOIN(handle->rx.thread, NULL);
             if (status != 0){
                 fprintf(stderr, "Error joining rx thread: %s\n", strerror(status));
             }
         }else{
-            link_close(handle->link);
+            link_close(handle->link, NULL);
         }
 
     }

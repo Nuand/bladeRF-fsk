@@ -99,8 +99,11 @@ struct link_handle *link_init(struct bladerf *dev, struct radio_params *params,
 /**
  * Deinitializes/closes/frees a link_handle struct. Does nothing if link is NULL
  *
- * @param[in]   link        pointer to link handle
+ * @param[in]   link          pointer to link handle
+ * @param[out]  avg_snr_db    Averaged SNR estimate over all received frames [dB]
+ *                            NAN indicates no estimate because no RX frames were detected
+ *                            Set to NULL if not needed.
  */
-void link_close(struct link_handle *link);
+void link_close(struct link_handle *link, float *avg_snr_db);
 
 #endif

@@ -80,6 +80,7 @@ struct rx {
     bool                   overrun;         //True if receiver experienced RX sample overruns
     unsigned int           warmup_cnt;      //Number of initial sync_rx calls where overrun
                                             //will be not flagged. Set to 0 to disable
+    float                  avg_snr_db;      //average SNR in dB over all RX'd frames
     #ifdef LOG_RX_SAMPLES
         FILE              *samples_file;
     #endif
@@ -322,6 +323,7 @@ struct phy_handle *phy_init(struct bladerf *dev, struct radio_params *params,
         ERROR("%s: Error initializing pthread_mutex\n", __FUNCTION__);
         goto error;
     }
+    phy->rx->avg_snr_db = NAN;  //init to NAN to indicate it's not valid
 
     #ifdef LOG_RX_SAMPLES
         //Open RX samples file
@@ -752,7 +754,7 @@ int phy_start_receiver(struct phy_handle *phy, unsigned int warmup_cnt)
     return 0;
 }
 
-int phy_stop_receiver(struct phy_handle *phy)
+int phy_stop_receiver(struct phy_handle *phy, float *avg_snr_db)
 {
     int status;
 
@@ -766,6 +768,11 @@ int phy_stop_receiver(struct phy_handle *phy)
         return -1;
     }
     DEBUG_MSG("RX: Receiver stopped\n");
+
+    if (avg_snr_db != NULL){
+        *avg_snr_db = phy->rx->avg_snr_db;
+    }
+
     if (phy->rx->overrun){
         return 1;   //warning: RX overruns were detected
     }else{
@@ -1299,6 +1306,7 @@ void *phy_receive_frames(void *arg)
             }else{
                 snr_est_db = 10*log10(snr_est_avg);
             }
+            phy->rx->avg_snr_db = snr_est_db;
             fprintf(stderr, "[PHY] RX: Average SNR = %.1f dB\n", snr_est_db);
         }
         #ifdef RX_SAMPLES_FROM_FILE
