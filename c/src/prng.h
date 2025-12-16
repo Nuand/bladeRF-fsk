@@ -27,7 +27,6 @@
 #include <stdlib.h>
 #include <assert.h>
 
-#include "host_config.h"
 
 /**
  * Update the PRNG value

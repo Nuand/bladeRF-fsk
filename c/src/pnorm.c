@@ -27,7 +27,6 @@
 #include <assert.h>
 #include <stdio.h>
 #include <math.h>
-#include "host_config.h"
 
 #include "pnorm.h"
 

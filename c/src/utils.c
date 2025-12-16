@@ -21,7 +21,22 @@
  * 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
  */
 
+#include <string.h>
+#include <stdbool.h>
+#include <limits.h>
+#include <getopt.h>
+#include <sys/stat.h>
+#include <errno.h>
+#include <ctype.h>
 #include "utils.h"
+
+#ifdef _WIN32
+#include <windows.h>
+#elif defined(__APPLE__)
+#include <mach/mach_time.h>
+#include <mach/clock.h>
+#include <mach/mach.h>
+#endif
 
 int load_samples_from_csv_file(char *filename, bool pad_zeros, int buffer_size,
                                 int16_t **samples)
@@ -261,12 +276,43 @@ int create_timeout_abs(unsigned int timeout_ms, struct timespec *timeout_abs)
 {
     int status;
 
-    //Get the current time
+#ifdef _WIN32
+    // Windows implementation
+    FILETIME ft;
+    ULARGE_INTEGER uli;
+    uint64_t nanoseconds;
+
+    // Get current time in 100-nanosecond intervals since January 1, 1601
+    GetSystemTimeAsFileTime(&ft);
+    uli.LowPart = ft.dwLowDateTime;
+    uli.HighPart = ft.dwHighDateTime;
+
+    // Convert to nanoseconds since Unix epoch (January 1, 1970)
+    // Windows epoch is 116444736000000000 100-ns intervals before Unix epoch
+    nanoseconds = (uli.QuadPart - 116444736000000000ULL) * 100;
+
+    // Convert to seconds and nanoseconds
+    timeout_abs->tv_sec = (time_t)(nanoseconds / 1000000000ULL);
+    timeout_abs->tv_nsec = (long)(nanoseconds % 1000000000ULL);
+#elif defined(__APPLE__)
+    // macOS implementation
+    clock_serv_t cclock;
+    mach_timespec_t mts;
+
+    host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
+    clock_get_time(cclock, &mts);
+    mach_port_deallocate(mach_task_self(), cclock);
+
+    timeout_abs->tv_sec = mts.tv_sec;
+    timeout_abs->tv_nsec = mts.tv_nsec;
+#else
+    // Linux implementation
     status = clock_gettime(CLOCK_REALTIME, timeout_abs);
     if(status != 0){
         perror("clock_gettime");
         return -1;
     }
+#endif
 
     //Add the timeout onto the current time
     timeout_abs->tv_sec += timeout_ms/1000;
@@ -300,4 +346,184 @@ void conv_struct_to_samples(struct complex_sample *struct_samples, unsigned int 
         samples[i] = struct_samples[i/2].i;
         samples[i+1] = struct_samples[i/2].q;
     }
+}
+
+int str2lnagain(const char *str, bladerf_lna_gain *gain)
+{
+    if (strcasecmp(str, "bypass") == 0) {
+        *gain = BLADERF_LNA_GAIN_BYPASS;
+    } else if (strcasecmp(str, "mid") == 0) {
+        *gain = BLADERF_LNA_GAIN_MID;
+    } else if (strcasecmp(str, "max") == 0) {
+        *gain = BLADERF_LNA_GAIN_MAX;
+    } else {
+        return -1;
+    }
+    return 0;
+}
+
+int str2int(const char *str, int min, int max, bool *valid)
+{
+    char *endptr;
+    long value;
+
+    *valid = false;
+
+    errno = 0;
+    value = strtol(str, &endptr, 0);
+    if (errno != 0 || endptr == str || *endptr != '\0') {
+        return 0;
+    }
+
+    if (value < min || value > max) {
+        return 0;
+    }
+
+    *valid = true;
+    return (int)value;
+}
+
+unsigned int str2uint(const char *str, unsigned int min, unsigned int max,
+                    bool *valid)
+{
+    char *endptr;
+    unsigned long value;
+
+    *valid = false;
+
+    errno = 0;
+    value = strtoul(str, &endptr, 0);
+    if (errno != 0 || endptr == str || *endptr != '\0') {
+        return 0;
+    }
+
+    if (value < min || value > max) {
+        return 0;
+    }
+
+    *valid = true;
+    return (unsigned int)value;
+}
+
+uint64_t str2uint64_suffix(const char *str, uint64_t min, uint64_t max,
+                                const struct numeric_suffix *suffixes,
+                                size_t num_suffixes, bool *valid)
+{
+    const char *p = str;
+    uint64_t int_part = 0;
+    uint64_t frac_part = 0;
+    int frac_digits = 0;
+    bool has_decimal = false;
+    uint64_t multiplier = 1;
+    uint64_t value = 0;
+    bool negative = false; // Although target is uint64_t, check for invalid input
+    size_t i;
+
+    *valid = false;
+
+    // Skip leading whitespace
+    while (isspace((unsigned char)*p)) {
+        p++;
+    }
+
+    // Check for sign (though result must be positive)
+    if (*p == '-') {
+        negative = true;
+        p++;
+    } else if (*p == '+') {
+        p++;
+    }
+
+    // Parse integer part
+    while (isdigit((unsigned char)*p)) {
+        if (int_part > (UINT64_MAX - (*p - '0')) / 10) return 0; // Overflow check
+        int_part = int_part * 10 + (*p - '0');
+        p++;
+    }
+
+    // Parse fractional part
+    if (*p == '.') {
+        has_decimal = true;
+        p++;
+        uint64_t frac_scale = 1;
+        while (isdigit((unsigned char)*p)) {
+            if (frac_digits < 18) { // Limit fractional digits to avoid overflow later
+                 if (frac_part > (UINT64_MAX - (*p - '0')) / 10) return 0; // Overflow
+                 if (frac_scale > UINT64_MAX / 10) return 0; // Overflow
+
+                frac_part = frac_part * 10 + (*p - '0');
+                frac_scale *= 10;
+                frac_digits++;
+            } else {
+                // Ignore excessive fractional digits
+            }
+            p++;
+        }
+    }
+
+    // Skip trailing whitespace before suffix
+    while (isspace((unsigned char)*p)) {
+        p++;
+    }
+
+    // Check for suffix
+    if (*p != '\0') {
+        bool suffix_found = false;
+        for (i = 0; i < num_suffixes; i++) {
+            if (strcasecmp(p, suffixes[i].suffix) == 0) {
+                multiplier = suffixes[i].multiplier;
+                suffix_found = true;
+                break;
+            }
+        }
+        if (!suffix_found) {
+            fprintf(stderr, "Error: Invalid suffix: %s\n", p);
+            return 0; // Invalid suffix
+        }
+    }
+
+    // Combine parts and apply multiplier
+    if (multiplier > UINT64_MAX / int_part) return 0; // Overflow check
+    value = int_part * multiplier;
+
+    if (has_decimal && frac_digits > 0) {
+        uint64_t scaled_frac_multiplier = multiplier;
+        uint64_t divisor = 1;
+        // Calculate divisor = 10^frac_digits safely
+        for (int k = 0; k < frac_digits; ++k) {
+            if (divisor > UINT64_MAX / 10) { // Overflow calculating divisor
+                 fprintf(stderr, "Error: Too many fractional digits for multiplier.\n");
+                 return 0;
+            }
+            divisor *= 10;
+        }
+
+        // Check if multiplier is divisible by divisor
+        if (multiplier % divisor != 0) {
+             fprintf(stderr, "Warning: Suffix multiplier not divisible by 10^%d, truncating fractional part.\n", frac_digits);
+             // Proceed with integer division, effectively truncating
+        }
+        scaled_frac_multiplier /= divisor;
+
+
+        if (scaled_frac_multiplier > 0 && frac_part > UINT64_MAX / scaled_frac_multiplier) return 0; // Overflow
+        uint64_t frac_contribution = frac_part * scaled_frac_multiplier;
+
+        if (value > UINT64_MAX - frac_contribution) return 0; // Overflow
+        value += frac_contribution;
+    }
+
+    // Final checks
+    if (negative) {
+        fprintf(stderr, "Error: Negative value provided for unsigned type.\n");
+        return 0; // Negative value invalid
+    }
+
+    if (value < min || value > max) {
+        fprintf(stderr, "Error: Value %llu is out of range [%llu, %llu]\n", (unsigned long long)value, (unsigned long long)min, (unsigned long long)max);
+        return 0;
+    }
+
+    *valid = true;
+    return value;
 }

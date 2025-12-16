@@ -30,7 +30,7 @@
 #include <inttypes.h>
 
 #include "correlator.h"
-#include "host_config.h"
+#include "phy.h"    //to get fsk_init() parameters
 
 #ifdef ENABLE_CORR_DEBUG_MSG
 #   define DBG(...) fprintf(stderr, "[Corr]  " __VA_ARGS__)

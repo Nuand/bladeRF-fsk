@@ -124,7 +124,6 @@ include_directories(${FSK_INCLUDE_DIRS})
 set(BLADERF_FSK_SRC
     ${SRC_DIR}/bladeRF-fsk.c
     ${SRC_DIR}/config.c
-    ${BLADERF_HOST_COMMON_SOURCE_DIR}/conversions.c
     ${SRC_DIR}/radio_config.c
     ${SRC_DIR}/fir_filter.c
     ${SRC_DIR}/fsk.c
@@ -152,7 +151,7 @@ endif()
 
 # Set link libraries
 set(BLADERF_FSK_LIBS
-    libbladerf_shared
+    bladeRF
     ${CMAKE_THREAD_LIBS_INIT}
 )
 
@@ -215,7 +214,7 @@ endif()
 
 # Set link libraries
 set(TEST_SUITE_LIBS
-    libbladerf_shared
+    bladeRF
     ${CMAKE_THREAD_LIBS_INIT}
 )
 
@@ -243,7 +242,7 @@ target_link_libraries(bladeRF-fsk_test_suite ${TEST_SUITE_LIBS})
 
 set(TEST_CONFIG_SRC
     ${SRC_DIR}/config.c
-    ${BLADERF_HOST_COMMON_SOURCE_DIR}/conversions.c
+    ${SRC_DIR}/utils.c
 )
 
 if(MSVC)
@@ -254,7 +253,7 @@ endif()
 
 # Set link libraries
 set(TEST_CONFIG_LIBS
-    libbladerf_shared
+    bladeRF
 )
 
 add_executable(bladeRF-fsk_test_config ${TEST_CONFIG_SRC})
@@ -282,20 +281,17 @@ target_compile_definitions(bladeRF-fsk_test_prng PRIVATE "-DPRNG_TEST")
 ################################################################################
 
 set(FIR_FILTER_TEST_SRC
-    ${BLADERF_HOST_COMMON_SOURCE_DIR}/conversions.c
     ${SRC_DIR}/fir_filter.c
     ${SRC_DIR}/utils.c
 )
 
 if(MSVC)
     set(FIR_FILTER_TEST_SRC ${FIR_FILTER_TEST_SRC}
-            ${BLADERF_HOST_COMMON_SOURCE_DIR}/windows/clock_gettime.c
     )
 endif()
 
 if(APPLE)
     set(FIR_FILTER_TEST_SRC ${FIR_FILTER_TEST_SRC}
-            ${BLADERF_HOST_COMMON_SOURCE_DIR}/osx/clock_gettime.c
     )
 endif()
 
@@ -327,13 +323,11 @@ set(CORRELATOR_TEST_SRC
 
 if(MSVC)
     set(CORRELATOR_TEST_SRC ${CORRELATOR_TEST_SRC}
-            ${BLADERF_HOST_COMMON_SOURCE_DIR}/windows/clock_gettime.c
     )
 endif()
 
 if(APPLE)
     set(CORRELATOR_TEST_SRC ${CORRELATOR_TEST_SRC}
-            ${BLADERF_HOST_COMMON_SOURCE_DIR}/osx/clock_gettime.c
     )
 endif()
 

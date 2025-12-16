@@ -28,7 +28,6 @@
 #include <pthread.h>
 #include <math.h>
 #include <libbladeRF.h>
-#include "host_config.h"
 
 #include "link.h"
 #include "config.h"

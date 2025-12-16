@@ -24,7 +24,6 @@
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
-#include "host_config.h"
 
 #include "fir_filter.h"
 
@@ -165,7 +164,6 @@ void fir_process(struct fir_filter *f, int16_t *input,
 
 #ifdef FIR_FILTER_TEST
 #include <stdbool.h>
-#include "conversions.h"
 #include "rx_ch_filter.h"
 #include "utils.h"
 

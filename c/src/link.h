@@ -37,7 +37,6 @@
 #include <time.h>
 #include <errno.h>
 #include <libbladeRF.h>
-#include "host_config.h"
 
 #include "common.h"
 

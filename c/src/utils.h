@@ -29,7 +29,6 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include "host_config.h"
 
 #if BLADERF_OS_WINDOWS || BLADERF_OS_OSX
     #include "clock_gettime.h"
@@ -131,4 +130,51 @@ void conv_samples_to_struct(int16_t *samples, unsigned int num_samples,
 void conv_struct_to_samples(struct complex_sample *struct_samples, unsigned int num_samples,
                             int16_t *samples);
 
+
+struct numeric_suffix {
+    const char *suffix;
+    uint64_t multiplier;
+};
+
+/**
+ * Convert a string to an LNA gain value
+ * @param str String to convert
+ * @param gain Pointer to store the converted gain value
+ * @return 0 on success, -1 on failure
+ */
+int str2lnagain(const char *str, bladerf_lna_gain *gain);
+
+/**
+ * Convert a string to an integer value
+ * @param str String to convert
+ * @param min Minimum allowed value
+ * @param max Maximum allowed value
+ * @param valid Pointer to store validity status
+ * @return Converted value
+ */
+int str2int(const char *str, int min, int max, bool *valid);
+
+/**
+ * Convert a string to an unsigned integer value
+ * @param str String to convert
+ * @param min Minimum allowed value
+ * @param max Maximum allowed value
+ * @param valid Pointer to store validity status
+ * @return Converted value
+ */
+unsigned int str2uint(const char *str, unsigned int min, unsigned int max,
+                    bool *valid);
+/**
+ * Convert a string with optional suffix to a uint64_t value
+ * @param str String to convert
+ * @param min Minimum allowed value
+ * @param max Maximum allowed value
+ * @param suffixes Array of valid suffixes and their multipliers
+ * @param num_suffixes Number of elements in suffixes array
+ * @param valid Set to true if conversion was successful
+ * @return Converted value, or 0 if conversion failed
+ */
+uint64_t str2uint64_suffix(const char *str, uint64_t min, uint64_t max,
+                                const struct numeric_suffix *suffixes,
+                                size_t num_suffixes, bool *valid);
 #endif

@@ -44,8 +44,8 @@
 #include <pthread.h>
 #include <errno.h>
 #include <math.h>
+#include <unistd.h>
 
-#include "host_config.h"
 #include "common.h"
 #include "utils.h"
 

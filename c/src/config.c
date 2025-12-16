@@ -28,7 +28,7 @@
 #include <errno.h>
 
 #include "config.h"
-#include "conversions.h"
+#include "utils.h"
 
 #ifdef DEBUG_CONFIG
 #   define pr_dbg(...) fprintf(stderr, "[CONFIG] " __VA_ARGS__)

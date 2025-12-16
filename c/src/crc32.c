@@ -25,7 +25,6 @@
 
 #include <stdlib.h>
 
-#include "host_config.h"
 #include "crc32.h"
 
 static uint32_t crc32_lut[256];
